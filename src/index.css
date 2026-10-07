@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------- Carevo design tokens (RGB channels, consumed by tailwind.config.js) ---------- */
+:root,
+[data-theme='dark'] {
+  --bg: 11 16 32;
+  --surface: 17 24 43;
+  --surface-2: 24 33 58;
+  --border: 40 51 82;
+  --fg: 233 237 247;
+  --muted: 148 160 184;
+  --brand: 79 124 255;
+  --brand-hover: 108 146 255;
+  --brand-soft: 79 124 255;
+  --success: 52 211 153;
+  --warning: 251 191 36;
+  --danger: 248 113 113;
+  --info: 56 189 248;
+  color-scheme: dark;
+}
+
+/* Light mode is architected but not the default. */
+[data-theme='light'] {
+  --bg: 246 248 252;
+  --surface: 255 255 255;
+  --surface-2: 240 243 250;
+  --border: 222 228 239;
+  --fg: 15 23 42;
+  --muted: 84 96 122;
+  --brand: 53 94 235;
+  --brand-hover: 40 78 210;
+  --brand-soft: 53 94 235;
+  --success: 5 150 105;
+  --warning: 180 110 0;
+  --danger: 220 38 38;
+  --info: 2 132 199;
+  color-scheme: light;
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-bg font-sans text-fg antialiased;
+    min-height: 100dvh;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-display tracking-tight;
+  }
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand ring-offset-2 ring-offset-bg;
+  }
+  ::selection {
+    background: rgb(var(--brand) / 0.35);
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+  .skeleton {
+    @apply relative overflow-hidden rounded-lg bg-surface-2;
+  }
+  .skeleton::after {
+    content: '';
+    @apply absolute inset-0 -translate-x-full;
+    background: linear-gradient(90deg, transparent, rgb(var(--fg) / 0.06), transparent);
+    animation: shimmer 1.4s infinite;
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
