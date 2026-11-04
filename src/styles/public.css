@@ -1,0 +1,9 @@
+/* Landing + auth pages */
+.role-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.role-card { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 14px; border: 1.5px solid var(--border); border-radius: var(--radius); cursor: pointer; transition: border-color .15s, background .15s; }
+.role-card input { position: absolute; opacity: 0; }
+.role-card span { font-size: .8rem; color: var(--muted); }
+.role-card .icon { color: var(--brand); margin-bottom: 4px; }
+.role-card.active { border-color: var(--brand); background: var(--brand-soft); }
+.role-card:focus-within { box-shadow: var(--focus); }
+
