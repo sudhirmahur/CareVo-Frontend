@@ -1,0 +1,33 @@
+/* Account center, help center, 2FA - shared by all panels */
+.ac { display: grid; gap: 16px; min-width: 0; }
+.ac .tabs { overflow-x: auto; max-width: 100%; }
+.ac-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 0; border-bottom: 1px solid var(--border, #e5e7eb); min-width: 0; }
+.ac-row:last-child { border-bottom: 0; }
+.ac-row > div { min-width: 0; }
+.ac-row .truncate { max-width: 100%; }
+.ac-list { list-style: none; margin: 0; padding: 0; }
+.ac-secret { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; padding: 8px 10px; background: var(--surface-2, #f3f4f6); border-radius: 8px; overflow-wrap: anywhere; word-break: break-all; }
+.ac-code { max-width: 220px; }
+.ac-cats { display: grid; gap: 4px; }
+.ac-cat { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border, #e5e7eb); }
+.ac-cat-h { font-size: .78rem; color: var(--muted, #6b7280); text-transform: uppercase; letter-spacing: .04em; }
+.ac-danger { border: 1px solid var(--danger, #dc2626); border-radius: 12px; padding: 14px; }
+.ac-pill-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.linklike { background: none; border: 0; padding: 0; color: var(--brand, #4f46e5); cursor: pointer; font: inherit; text-decoration: underline; }
+@media (max-width: 560px) { .ac-cat { grid-template-columns: 1fr 1fr; } .ac-cat > :first-child { grid-column: 1 / -1; } .ac-code { max-width: 100%; } }
+
+.hc { display: grid; gap: 16px; min-width: 0; }
+.hc .tabs { overflow-x: auto; max-width: 100%; }
+.hc-faq details { border-bottom: 1px solid var(--border, #e5e7eb); padding: 10px 0; }
+.hc-faq summary { cursor: pointer; font-weight: 600; }
+.hc-faq p { margin: 8px 0 0; color: var(--muted, #6b7280); }
+.hc-ticket { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; padding: 12px; border: 1px solid var(--border, #e5e7eb); border-radius: 12px; width: 100%; background: transparent; text-align: left; cursor: pointer; min-width: 0; }
+.hc-ticket > div { min-width: 0; }
+.hc-thread { display: grid; gap: 10px; }
+.hc-msg { padding: 10px 12px; border-radius: 12px; background: var(--surface-2, #f3f4f6); max-width: 100%; overflow-wrap: anywhere; }
+.hc-msg.staff { background: var(--brand-soft, #eef2ff); }
+.hc-msg small { display: block; color: var(--muted, #6b7280); margin-bottom: 2px; }
+.hc-rating { display: flex; gap: 6px; }
+.hc-rating button { font-size: 1.4rem; background: none; border: 0; cursor: pointer; color: #d1d5db; padding: 2px; }
+.hc-rating button.on { color: #f59e0b; }
+.chat-head-actions{margin-left:auto;display:flex;gap:2px}
