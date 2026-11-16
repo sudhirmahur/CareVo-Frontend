@@ -6,7 +6,8 @@ import { Link, useNavigate, useSearchParams } from '../../lib/router';
 import { useToast } from '../../lib/toast';
 import { Avatar, Badge, Button, Card, DataState, Input, Modal, PageHeader, SearchInput, Select, SkeletonList, SkillChips, StatusBadge, Tabs, Textarea } from '../../components/ui';
 import Icon from '../../components/Icon';
-import { STAGES } from './util';
+import { CompareModal, EvaluationPanel } from './Evaluations';
+import { STAGES, STAGE_OPTIONS, downloadFile } from './util';
 
 function CandidateCard({ a, onOpen }) {
   const c = a.candidate || {};
@@ -60,8 +61,9 @@ function ScheduleForm({ app, onDone, onCancel }) {
   );
 }
 
-function DetailModal({ app, onClose, onChanged }) {
+function DetailModal({ app, onClose, onChanged, teamNames }) {
   const toast = useToast();
+  const [tab, setTab] = useState('overview');
   const navigate = useNavigate();
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState('');
@@ -80,6 +82,14 @@ function DetailModal({ app, onClose, onChanged }) {
   return (
     <Modal open size="lg" onClose={onClose} title={c.name || 'Candidate'} description={`Applied for ${app.job_title} · ${formatDate(app.applied_at, true)}`}>
       <div className="stack">
+        <Tabs value={tab} onChange={setTab} tabs={[{ value: 'overview', label: 'Overview' }, { value: 'screening', label: 'Screening', count: (app.answers || []).length }, { value: 'evaluation', label: 'Evaluation' }]} />
+        {tab === 'screening' && (
+          (app.answers || []).length === 0 ? <p className="muted" data-testid="no-answers">No screening questions were asked for this job.</p> : (
+            <dl className="r-answers" data-testid="answers">{app.answers.map((x) => <div key={x.question_id}><dt>{x.question}</dt><dd>{x.answer}</dd></div>)}</dl>
+          )
+        )}
+        {tab === 'evaluation' && <EvaluationPanel appId={app.id} teamNames={teamNames} />}
+        {tab === 'overview' && <>
         <div className="row-wrap"><StatusBadge status={app.status} />{app.source === 'external' && <Badge tone="info"><Icon name="link" size={12} /> Applied via company link</Badge>}</div>
         <div className="r-detail-grid">
           <div className="stack-sm">
@@ -126,9 +136,36 @@ function DetailModal({ app, onClose, onChanged }) {
               <Button variant="danger" icon="x" loading={busy === 'rejected'} disabled={app.status === 'rejected'} onClick={() => setStatus('rejected')}>Reject</Button>
               <Button variant="secondary" icon="calendar" onClick={() => setScheduling(true)} disabled={app.status === 'rejected'}>Schedule interview</Button>
               <Button variant="secondary" icon="message" onClick={() => navigate(`/recruiter/messages?with=${c.id}`)}>Message</Button>
+              <Button variant="secondary" icon="award" disabled={app.status === 'rejected'} onClick={() => navigate(`/recruiter/offers?application_id=${app.id}`)}>Make offer</Button>
             </div>
           </div>
         )}
+        </>}
+      </div>
+    </Modal>
+  );
+}
+
+export function BulkMessageModal({ appIds = [], poolIds = [], onClose }) {
+  const toast = useToast();
+  const [f, setF] = useState({ subject: '', message: '' });
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const send = async () => {
+    if (f.subject.trim().length < 2 || f.message.trim().length < 2) return setErr('Enter a subject and a message.');
+    setBusy(true);
+    try {
+      const r = await api.post('/recruiter/candidates/message', { application_ids: appIds, pool_ids: poolIds, subject: f.subject.trim(), message: f.message.trim() });
+      toast.success(`Sent: ${r.in_app} in-app, ${r.email} e-mail`);
+      onClose();
+    } catch (e) { setErr(errorMessage(e)); } finally { setBusy(false); }
+  };
+  return (
+    <Modal open size="sm" title="Message candidates" description={`${appIds.length + poolIds.length} recipient(s)`} onClose={onClose} footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button loading={busy} onClick={send}>Send</Button></>}>
+      <div className="stack">
+        {err && <p className="form-error" role="alert">{err}</p>}
+        <Input label="Subject" value={f.subject} onChange={(e) => setF({ ...f, subject: e.target.value })} maxLength={120} />
+        <Textarea label="Message" rows={4} value={f.message} onChange={(e) => setF({ ...f, message: e.target.value })} maxLength={2000} />
       </div>
     </Modal>
   );
@@ -143,18 +180,37 @@ export default function Applications() {
   const [col, setCol] = useState('applied');
   const [openId, setOpenId] = useState(null);
   const [page, setPage] = useState(1);
+  const [sel, setSel] = useState([]);
+  const [compare, setCompare] = useState(false);
+  const [msg, setMsg] = useState(false);
+  const [qa, setQa] = useState({ question_id: '', answer: '' });
+  const toast = useToast();
   const q = useDebounce(search, 350);
+  const team = useAsync(async () => { try { return await api.get('/recruiter/team'); } catch { return { items: [] }; } }, []);
+  const teamNames = (team.data?.items || []).map((m) => m.name);
+  const jobDetail = useAsync(async () => (jobId ? api.get(`/recruiter/jobs/${jobId}`) : null), [jobId]);
+  const questions = jobDetail.data?.screening_questions || [];
+  const filtering = !!(jobId && qa.question_id && qa.answer);
+  const screen = useAsync(async () => (filtering ? api.get(`/recruiter/jobs/${jobId}/screening`, { question_id: qa.question_id, answer: qa.answer }) : null), [jobId, qa.question_id, qa.answer]);
   const jobs = useAsync(() => api.get('/recruiter/jobs', { limit: 50 }), []);
   const boardMode = view === 'board';
   const { data, loading, error, reload } = useAsync(
     () => api.get('/recruiter/applications', { job_id: jobId, search: q, status: boardMode ? '' : status, page: boardMode ? 1 : page, limit: boardMode ? 100 : 10 }),
     [jobId, q, status, page, view],
   );
-  const items = data?.items || [];
+  const items = filtering ? (screen.data?.items || []) : (data?.items || []);
   const open = useMemo(() => items.find((a) => a.id === openId), [items, openId]);
   const groups = useMemo(() => Object.fromEntries(STAGES.map((s) => [s.key, items.filter((a) => a.status === s.key)])), [items]);
   const withdrawn = items.filter((a) => a.status === 'withdrawn');
   useEffect(() => setPage(1), [jobId, q, status]);
+  useEffect(() => { setQa({ question_id: '', answer: '' }); }, [jobId]);
+  useEffect(() => { setSel([]); }, [jobId, q, status, page, view]);
+  const toggle = (id) => setSel((x) => (x.includes(id) ? x.filter((i) => i !== id) : [...x, id]));
+  const allSelected = items.length > 0 && sel.length === items.length;
+  const bulk = async (body, ok) => {
+    try { const r = await api.post('/recruiter/applications/bulk', { ids: sel, ...body }); toast.success(`${r.updated} updated${r.skipped ? `, ${r.skipped} skipped` : ''}${ok ? '' : ''}`); setSel([]); reload(); } catch (e) { toast.error(errorMessage(e)); }
+  };
+  const exportCsv = () => downloadFile('/recruiter/applications/export', 'applications.csv', { job_id: jobId, status }).catch((e) => toast.error(errorMessage(e)));
 
   return (
     <>
@@ -162,6 +218,9 @@ export default function Applications() {
       <div className="r-filters">
         <SearchInput value={search} onChange={setSearch} placeholder="Search by name or email" />
         <Select aria-label="Filter by job" value={jobId} onChange={(e) => setParams({ job_id: e.target.value })} placeholder="All jobs" options={(jobs.data?.items || []).map((j) => ({ value: j.id, label: j.title }))} />
+        {questions.length > 0 && <Select aria-label="Screening question" value={qa.question_id} onChange={(e) => setQa({ question_id: e.target.value, answer: '' })} placeholder="Screening filter" options={questions.map((x) => ({ value: x.id, label: x.question.slice(0, 40) }))} />}
+        {qa.question_id && (() => { const qq = questions.find((x) => x.id === qa.question_id); const opts = qq?.type === 'yesno' ? ['Yes', 'No'] : qq?.type === 'choice' ? qq.options : null; return opts ? <Select aria-label="Screening answer" value={qa.answer} onChange={(e) => setQa({ ...qa, answer: e.target.value })} placeholder="Answer…" options={opts.map((o) => ({ value: o, label: o }))} /> : <input className="input" aria-label="Screening answer" placeholder="Exact answer" value={qa.answer} onChange={(e) => setQa({ ...qa, answer: e.target.value })} />; })()}
+        <Button variant="secondary" size="sm" icon="download" onClick={exportCsv}>Export CSV</Button>
         {!boardMode && <Select aria-label="Filter by status" value={status} onChange={(e) => setStatus(e.target.value)} placeholder="All statuses" options={[...STAGES.map((s) => ({ value: s.key, label: s.label })), { value: 'withdrawn', label: 'Withdrawn' }]} />}
       </div>
       <DataState loading={loading} error={error} onRetry={reload} hasData={!!data} skeleton={<SkeletonList count={3} />} isEmpty={items.length === 0} empty={{ icon: 'users', title: q || jobId || status ? 'No applications match your filters' : 'No applications yet', description: 'Candidates who apply to your jobs will appear here.' }}>
@@ -182,11 +241,23 @@ export default function Applications() {
           </>
         ) : (
           <>
+            <label className="r-selectall small"><input type="checkbox" className="r-check" checked={allSelected} onChange={() => setSel(allSelected ? [] : items.map((a) => a.id))} /> Select all ({items.length})</label>
+            {sel.length > 0 && (
+              <div className="r-bulkbar" role="region" aria-label="Bulk actions" data-testid="bulkbar">
+                <strong>{sel.length} selected</strong>
+                <Button size="sm" variant="soft" onClick={() => bulk({ status: 'shortlisted' })}>Shortlist</Button>
+                <Button size="sm" variant="danger" onClick={() => bulk({ status: 'rejected' })}>Reject</Button>
+                <Select aria-label="Move to stage" value="" onChange={(e) => e.target.value && bulk({ stage: e.target.value })} placeholder="Move to stage…" options={STAGE_OPTIONS} />
+                <Button size="sm" variant="secondary" icon="message" onClick={() => setMsg(true)}>Message</Button>
+                <Button size="sm" variant="secondary" icon="chart" disabled={sel.length < 2 || sel.length > 5} onClick={() => setCompare(true)}>Compare</Button>
+              </div>
+            )}
             <div className="stack">
               {items.map((a) => (
                 <Card key={a.id} className="r-app-row">
+                  <input type="checkbox" className="r-check" aria-label={`Select ${a.candidate?.name}`} checked={sel.includes(a.id)} onChange={() => toggle(a.id)} />
                   <Avatar name={a.candidate?.name} size={42} />
-                  <div className="grow"><strong className="truncate" style={{ display: 'block' }}>{a.candidate?.name}</strong><span className="muted small truncate" style={{ display: 'block' }}>{a.job_title} · {a.candidate?.email}</span><span className="muted small">{formatDate(a.applied_at)}</span></div>
+                  <div className="grow"><strong className="truncate" style={{ display: 'block' }}>{a.candidate?.name}</strong><span className="muted small truncate" style={{ display: 'block' }}>{a.job_title} · {a.candidate?.email}</span><span className="muted small">{formatDate(a.applied_at)}{a.stage ? ` · stage: ${a.stage}` : ''}</span></div>
                   <StatusBadge status={a.status} />
                   <Button variant="secondary" size="sm" onClick={() => setOpenId(a.id)}>Review</Button>
                 </Card>
@@ -200,7 +271,9 @@ export default function Applications() {
           </>
         )}
       </DataState>
-      {open && <DetailModal app={open} onClose={() => setOpenId(null)} onChanged={reload} />}
+      {open && <DetailModal app={open} onClose={() => setOpenId(null)} onChanged={reload} teamNames={teamNames} />}
+      {compare && <CompareModal ids={sel} onClose={() => setCompare(false)} />}
+      {msg && <BulkMessageModal appIds={sel} onClose={() => setMsg(false)} />}
     </>
   );
 }

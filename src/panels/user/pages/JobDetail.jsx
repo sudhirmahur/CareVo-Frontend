@@ -8,7 +8,7 @@ import { errorMessage } from '../../../lib/api';
 import Icon from '../../../components/Icon';
 import ReportModal from '../../../components/shared/ReportModal';
 import { Avatar, Badge, Button, Card, DataState, SkeletonList, SkillChips } from '../../../components/ui';
-import { ApplyControl, useApply } from '../parts';
+import { ApplyControl, useApply, WORK_MODE } from '../parts';
 
 function Bullets({ title, items }) {
   if (!items?.length) return null;
@@ -58,6 +58,7 @@ export default function JobDetail() {
                 <ul className="u-meta u-meta-lg">
                   {job.location && <li><Icon name="mapPin" size={15} /> {job.location}</li>}
                   <li><Icon name="briefcase" size={15} /> {jobTypeLabel(job.job_type)}</li>
+                  {job.work_mode && <li data-testid="work-mode"><Icon name="globe" size={15} /> {WORK_MODE[job.work_mode] || job.work_mode}</li>}
                   {salaryRange(job.salary_min, job.salary_max) && <li><Icon name="dollar" size={15} /> {salaryRange(job.salary_min, job.salary_max)}</li>}
                   {job.application_deadline && <li><Icon name="clock" size={15} /> Apply by {formatDate(job.application_deadline)}</li>}
                   <li><Icon name="eye" size={15} /> {job.views_count} views</li>

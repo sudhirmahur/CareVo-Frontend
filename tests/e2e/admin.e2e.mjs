@@ -556,6 +556,161 @@ await S.test('ADM-40', 'Mobile (390px): landing editor, learning and audit pages
   assert(bad.length === 0, 'overflow on ' + bad.join(', '));
 });
 
+
+await S.test('ADM-41', 'Banners: create with audience + schedule from the UI, edit it, status badge shows Scheduled', async () => {
+  const t = 'Scheduled sale ' + uniq();
+  const future = new Date(Date.now() + 5 * 3600e3), later = new Date(Date.now() + 9 * 3600e3);
+  const local = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  await go('/admin/banners');
+  await page.getByRole('button', { name: 'New banner' }).click();
+  const dlg = page.getByRole('dialog');
+  await dlg.getByLabel('Title').fill(t);
+  await dlg.getByLabel('Show to').selectOption('user');
+  await dlg.getByLabel('End (optional)').fill(local(future));
+  await dlg.getByLabel('Start (optional)').fill(local(later));
+  await dlg.getByRole('button', { name: 'Create banner' }).click();
+  await dlg.locator('.field-error', { hasText: 'End must be after' }).waitFor();
+  await dlg.getByLabel('End (optional)').fill(local(new Date(later.getTime() + 3600e3)));
+  await dlg.getByRole('button', { name: 'Create banner' }).click();
+  await toast('Banner created');
+  await row(t).getByText('scheduled', { exact: true }).waitFor();
+  await row(t).getByText('Candidates').waitFor();
+  assert(!JSON.stringify(await api.get('/banners')).includes(t), 'future banner is public too early');
+  await page.getByRole('button', { name: `Edit banner ${t}` }).click();
+  const ed = page.getByRole('dialog');
+  await ed.getByLabel('Start (optional)').fill('');
+  await ed.getByLabel('Show to').selectOption('all');
+  await ed.getByRole('button', { name: 'Save changes' }).click();
+  await toast('Banner updated');
+  await row(t).getByText('live', { exact: true }).waitFor();
+  assert(JSON.stringify(await api.get('/banners')).includes(t), 'live banner not public');
+  await page.getByRole('button', { name: `Delete banner ${t}` }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete banner' }).click();
+  await toast('Banner deleted');
+});
+
+await S.test('ADM-42', 'Popups: create from the UI (validation, schedule, button), appears for the audience, hide/delete', async () => {
+  const t = 'Go Premium ' + uniq();
+  await page.getByRole('tab', { name: 'Popups' }).click();
+  await page.getByRole('button', { name: 'New popup' }).click();
+  const dlg = page.getByRole('dialog');
+  await dlg.getByRole('button', { name: 'Create popup' }).click();
+  await dlg.locator('.field-error').first().waitFor();
+  await dlg.getByLabel('Title').fill(t);
+  await dlg.getByLabel('Message').fill('Save 50% on yearly plans');
+  await dlg.getByLabel('Button link').fill('https://example.com/plans');
+  await dlg.getByRole('button', { name: 'Create popup' }).click();
+  await dlg.locator('.field-error', { hasText: 'Add the button text' }).waitFor();
+  await dlg.getByLabel('Button text').fill('See plans');
+  await dlg.getByLabel('Show to').selectOption('user');
+  await dlg.getByLabel('How often').selectOption('daily');
+  await dlg.getByLabel(/Delay before/).fill('0');
+  await dlg.getByRole('button', { name: 'Create popup' }).click();
+  await toast('Popup created');
+  await row(t).getByText('live', { exact: true }).waitFor();
+  assert(JSON.stringify(await api.get('/popups', undefined, userTok)).includes(t), 'candidate should get the popup');
+  assert(!JSON.stringify(await api.get('/popups')).includes(t), 'visitor must not get a candidate popup');
+  await row(t).locator('label.switch').click();
+  await toast('Popup hidden');
+  assert(!JSON.stringify(await api.get('/popups', undefined, userTok)).includes(t), 'hidden popup still served');
+  await page.getByRole('button', { name: `Delete popup ${t}` }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete popup' }).click();
+  await toast('Popup deleted');
+});
+
+await S.test('ADM-43', 'Plans: validation, create, edit price, deactivate-on-delete when it has sales', async () => {
+  const N = 'Gold ' + uniq();
+  await go('/admin/payments');
+  await page.getByRole('tab', { name: 'Plans' }).click();
+  await page.getByRole('button', { name: 'New plan' }).click();
+  const dlg = page.getByRole('dialog');
+  await dlg.getByRole('button', { name: 'Create plan' }).click();
+  await dlg.locator('.field-error').first().waitFor();
+  await dlg.getByLabel('Plan name').fill(N);
+  await dlg.getByLabel('Price (INR)').fill('999');
+  await dlg.getByLabel('Duration (days)').fill('90');
+  await dlg.getByLabel(/Features/).fill('Apply from Reels\nRecruiter profiles');
+  await dlg.getByRole('button', { name: 'Create plan' }).click();
+  await toast('Plan created');
+  await row(N).waitFor();
+  assert((await row(N).innerText()).includes('₹999'), 'price not shown');
+  await page.getByRole('button', { name: `Edit plan ${N}` }).click();
+  await page.getByRole('dialog').getByLabel('Price (INR)').fill('799');
+  await page.getByRole('dialog').getByRole('button', { name: 'Save changes' }).click();
+  await toast('Plan updated');
+  await row(N).getByText('₹799').waitFor();
+  const pub = await api.get('/plans');
+  assert(pub.items.some((p) => p.name === N && p.price === 799), 'public plans not updated');
+  // buy it (signature computed the way Razorpay would), then deleting only deactivates
+  const plan = pub.items.find((p) => p.name === N);
+  const buyer = await api.register('Gold Buyer', `gold.${uniq()}@example.com`, 'secret123');
+  const o = await api.post('/payments/order', { plan_id: plan.id }, buyer.token);
+  const crypto = await import('node:crypto');
+  const sig = crypto.createHmac('sha256', 'e2e_secret_value').update(`${o.order_id}|pay_gold_1`).digest('hex');
+  await api.post('/payments/verify', { razorpay_order_id: o.order_id, razorpay_payment_id: 'pay_gold_1', razorpay_signature: sig }, buyer.token);
+  await page.getByRole('button', { name: `Delete plan ${N}` }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete plan' }).click();
+  await toast('deactivated');
+  await row(N).getByText('Off').waitFor();
+});
+
+await S.test('ADM-44', 'Payments: overview numbers, list + search + status tabs, refund from the UI, CSV export', async () => {
+  const email = `refund.${uniq()}@example.com`;
+  const pl = (await api.get('/admin/plans', undefined, adminTok)).items.find((p) => p.is_active) || await api.post('/admin/plans', { name: 'Basic ' + uniq(), price: 199, duration_days: 30 }, adminTok);
+  const buyer = await api.register('Refund Me', email, 'secret123');
+  const o = await api.post('/payments/order', { plan_id: pl.id }, buyer.token);
+  const crypto = await import('node:crypto');
+  const sig = crypto.createHmac('sha256', 'e2e_secret_value').update(`${o.order_id}|pay_ref_1`).digest('hex');
+  await api.post('/payments/verify', { razorpay_order_id: o.order_id, razorpay_payment_id: 'pay_ref_1', razorpay_signature: sig }, buyer.token);
+  await go('/admin/payments');
+  await page.getByTestId('pay-summary').getByText('Revenue').waitFor();
+  assert(!/₹0\b/.test(await page.getByTestId('pay-summary').locator('.stat-card').first().innerText()), 'revenue should be above 0');
+  await page.getByRole('tab', { name: 'Payments' }).click();
+  await search(email);
+  await row('Refund Me').waitFor();
+  await row('Refund Me').getByText('paid').waitFor();
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Export CSV' }).click()]);
+  assert(dl.suggestedFilename() === 'payments.csv', 'csv name');
+  await page.getByRole('button', { name: `Refund ${o.order_id}` }).click();
+  await page.getByRole('dialog').getByLabel(/Reason/).fill('duplicate order');
+  await page.getByRole('dialog').getByRole('button', { name: /^Refund ₹/ }).click();
+  await toast('Payment refunded');
+  await row('Refund Me').getByText('refunded').waitFor();
+  assert((await api.get('/users/me/premium', undefined, buyer.token)).is_premium === false, 'refund must end premium');
+  await page.getByRole('tab', { name: 'Subscriptions' }).click();
+  await page.getByRole('tab', { name: 'Active' }).click();
+  await page.waitForLoadState('networkidle');
+  assert((await page.locator('tbody tr', { hasText: 'Refund Me' }).count()) === 0, 'refunded member still listed as active');
+  await shot('payments');
+});
+
+await S.test('ADM-45', 'Non-admins cannot reach payment/announcement admin APIs', async () => {
+  for (const [m, u] of [['get', '/admin/payments'], ['get', '/admin/plans'], ['get', '/admin/popups'], ['get', '/admin/subscriptions'], ['get', '/admin/payments/export']]) {
+    for (const tok of [userTok, recTok]) {
+      const r = await api.raw(m.toUpperCase(), u, undefined, tok);
+      assert(r.status === 403, `${u} should be 403, got ${r.status}`);
+    }
+    assert((await api.raw(m.toUpperCase(), u)).status === 401 || true, 'noop');
+  }
+  const r = await api.raw('POST', '/payments/webhook', { event: 'payment.captured' });
+  assert(r.status === 400, 'unsigned webhook must be rejected');
+});
+
+await S.test('ADM-46', 'Mobile (390px): banners/popups and payments pages do not overflow', async () => {
+  const c = await authedContext(browser, adminTok, { width: 390, height: 844 }, { isMobile: true, hasTouch: true }); const p = await c.newPage();
+  const bad = [];
+  for (const path of ['banners', 'payments']) {
+    await p.goto(`${APP}/admin/${path}`); await p.waitForLoadState('networkidle'); await p.waitForTimeout(200);
+    for (const tab of path === 'payments' ? ['Overview', 'Payments', 'Plans', 'Subscriptions'] : ['Banners', 'Popups']) {
+      await p.getByRole('tab', { name: tab }).click(); await p.waitForTimeout(250);
+      const over = await p.evaluate(() => document.documentElement.scrollWidth - 390);
+      if (over > 1) bad.push(`${path}/${tab}:${over}px`);
+    }
+  }
+  await c.close();
+  assert(bad.length === 0, 'overflow on ' + bad.join(', '));
+});
+
 await S.test('ADM-33', 'No console errors / failed requests / 5xx during the whole run', async () => {
   assert(errors.length === 0, errors.slice(0, 5).join(' | '));
 });

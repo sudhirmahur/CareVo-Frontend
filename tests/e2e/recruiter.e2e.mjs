@@ -346,7 +346,59 @@ await S.test('REC-27', 'Mobile (390px): no horizontal overflow on any recruiter 
   assert(bad.length === 0, 'overflow on ' + bad.join(', '));
 });
 
-await S.test('REC-28', 'No console errors / failed requests / 5xx during the whole run', async () => {
+
+await S.test('REC-29', 'Desktop sidebar: grouped links, active state, navigates, stays while page scrolls', async () => {
+  const c = await authedContext(browser, myTok); const p = await c.newPage();
+  await p.goto(APP + '/recruiter/dashboard'); await p.waitForLoadState('networkidle');
+  const side = p.getByRole('navigation', { name: 'Main' });
+  await side.waitFor();
+  for (const t of ['Dashboard', 'Jobs', 'Applications', 'Interviews', 'Videos', 'Messages', 'Notifications', 'Followers', 'Company profile', 'Account & security']) {
+    assert(await side.getByRole('link', { name: t }).isVisible(), `sidebar link ${t} missing`);
+  }
+  for (const g of ['Hiring', 'Communicate', 'Company']) await p.locator('.r-side-title', { hasText: g }).waitFor();
+  await side.getByRole('link', { name: 'Jobs' }).click();
+  await p.waitForURL('**/recruiter/jobs');
+  assert(/active/.test(await side.getByRole('link', { name: 'Jobs' }).getAttribute('class')), 'active link not highlighted');
+  assert(!(await p.locator('.r-tabbar').isVisible()), 'mobile tab bar must be hidden on desktop');
+  const box = await p.locator('.r-side').boundingBox();
+  assert(box.x === 0 && box.width > 200 && box.width < 300, 'sidebar geometry off ' + JSON.stringify(box));
+  await p.screenshot({ path: `${SHOTS}/e2e-sidebar.png` });
+  await p.getByRole('button', { name: 'Account menu' }).click();
+  await p.getByRole('menuitem', { name: 'Sign out' }).waitFor();
+  await c.close();
+});
+
+await S.test('REC-30', 'Mobile: sidebar hidden, bottom tab bar + More drawer work', async () => {
+  const c = await authedContext(browser, myTok, { width: 390, height: 844 }, { isMobile: true, hasTouch: true }); const p = await c.newPage();
+  await p.goto(APP + '/recruiter/dashboard'); await p.waitForLoadState('networkidle');
+  assert(!(await p.locator('.r-side').isVisible()), 'desktop sidebar should be hidden');
+  const tabs = p.getByRole('navigation', { name: 'Primary' });
+  await tabs.getByRole('link', { name: 'Jobs' }).click();
+  await p.waitForURL('**/recruiter/jobs');
+  await tabs.getByRole('button', { name: 'More' }).click();
+  const drawer = p.getByRole('dialog', { name: 'Menu' });
+  await drawer.getByRole('link', { name: 'Company profile' }).click();
+  await p.waitForURL('**/recruiter/company');
+  await p.waitForFunction(() => !document.querySelector('.r-drawer'));
+  await p.screenshot({ path: `${SHOTS}/e2e-mobile-tabs.png` });
+  await c.close();
+});
+
+await S.test('REC-31', 'Admin banner for recruiters shows in the recruiter panel; candidate-only banner does not', async () => {
+  const t1 = 'Hiring week ' + uniq(), t2 = 'Candidates only ' + uniq();
+  const b1 = await api.post('/admin/banners', { title: t1, text: 'Post jobs free', audience: 'recruiter', link_url: 'https://example.com/hire' }, adminTok);
+  const b2 = await api.post('/admin/banners', { title: t2, audience: 'user' }, adminTok);
+  const c = await authedContext(browser, myTok); const p = await c.newPage();
+  await p.goto(APP + '/recruiter/dashboard'); await p.waitForLoadState('networkidle');
+  await p.getByTestId('banner').filter({ hasText: t1 }).waitFor();
+  assert((await p.getByText(t2).count()) === 0, 'candidate-only banner leaked to recruiter');
+  await p.getByRole('button', { name: `Dismiss ${t1}` }).click();
+  await p.waitForFunction((t) => !document.body.innerText.includes(t), t1);
+  await c.close();
+  await api.del(`/admin/banners/${b1.id}`, undefined, adminTok); await api.del(`/admin/banners/${b2.id}`, undefined, adminTok);
+});
+
+await S.test('REC-32', 'No console errors / failed requests / 5xx during the whole run', async () => {
   assert(errors.length === 0, errors.slice(0, 5).join(' | '));
 });
 

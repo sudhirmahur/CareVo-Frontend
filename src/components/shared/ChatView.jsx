@@ -5,9 +5,10 @@ import { useSearchParams } from '../../lib/router';
 import { useToast } from '../../lib/toast';
 import { errorMessage } from '../../lib/api';
 import { timeAgo, titleCase } from '../../lib/format';
-import { Avatar, Button, DataState, EmptyState, IconButton, Spinner } from '../ui';
+import { Avatar, Button, ConfirmDialog, DataState, EmptyState, IconButton, Spinner } from '../ui';
 import { kindOf } from './MediaUpload';
 import Icon from '../Icon';
+import ReportModal from './ReportModal';
 
 /** 1-to-1 chat. Open a thread directly with  /messages?with=<userId>. Polls every 8s. */
 export default function ChatView({ myId }) {
@@ -19,6 +20,8 @@ export default function ChatView({ myId }) {
   const [peer, setPeer] = useState(null);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [confirmBlock, setConfirmBlock] = useState(false);
   const bodyRef = useRef(null);
   const fileRef = useRef(null);
   const [attach, setAttach] = useState(null);
@@ -83,6 +86,18 @@ export default function ChatView({ myId }) {
     }
   };
 
+  const blockPeer = async () => {
+    try {
+      await api.post('/account/blocks', { user_id: peerId });
+      toast.success(`${peer?.name || 'User'} is blocked. They can no longer message you.`);
+      setConfirmBlock(false);
+      setParams({ with: '' }, { keepScroll: true });
+      convs.reload();
+    } catch (err) {
+      toast.error(errorMessage(err));
+    }
+  };
+
   const items = convs.data?.items || [];
   // a brand-new thread (not in the list yet) still shows the header via /peer
   return (
@@ -115,6 +130,10 @@ export default function ChatView({ myId }) {
                 <strong>{peer?.name || 'Loading…'}</strong>
                 <p className="muted small">{peer ? `${titleCase(peer.role)}${peer.company_name ? ` · ${peer.company_name}` : ''}` : ''}</p>
               </div>
+              <div className="chat-head-actions">
+                <IconButton icon="flag" label="Report this conversation" onClick={() => setReportOpen(true)} />
+                <IconButton icon="ban" label="Block this user" onClick={() => setConfirmBlock(true)} />
+              </div>
             </div>
             <div className="chat-body" ref={bodyRef} aria-live="polite">
               {thread.length === 0 && <p className="muted small" style={{ margin: 'auto' }}>No messages yet. Say hello!</p>}
@@ -146,6 +165,8 @@ export default function ChatView({ myId }) {
           </>
         )}
       </section>
+      <ReportModal open={reportOpen} onClose={() => setReportOpen(false)} contentType="message" contentId={[...thread].reverse().find((m) => m.sender_id !== myId)?.id || peerId} label={`conversation with ${peer?.name || 'this user'}`} />
+      <ConfirmDialog open={confirmBlock} danger title={`Block ${peer?.name || 'this user'}?`} message="They will not be able to message you and you will not be able to message them. You can unblock them any time in Account & security." confirmLabel="Block" onConfirm={blockPeer} onCancel={() => setConfirmBlock(false)} />
     </div>
   );
 }

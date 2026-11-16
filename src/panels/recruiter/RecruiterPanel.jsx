@@ -3,6 +3,7 @@ import './recruiter.css';
 import Icon from '../../components/Icon';
 import NotificationBell from '../../components/shared/NotificationBell';
 import { Avatar, Badge, Button, EmptyState, Logo, PageHeader } from '../../components/ui';
+import { BannerStrip } from '../../components/shared/Announcements';
 import ChatView from '../../components/shared/ChatView';
 import NotificationsView from '../../components/shared/NotificationsView';
 import { api } from '../../lib/api';
@@ -16,21 +17,42 @@ import Applications from './Applications';
 import Interviews from './Interviews';
 import Videos from './Videos';
 import { Followers, Account } from './Misc';
+import Calendar from './Calendar';
+import Analytics from './Analytics';
+import Team from './Team';
+import Candidates from './Candidates';
+import Offers from './Offers';
+import AccountCenter from '../../components/shared/AccountCenter';
+import HelpCenter from '../../components/shared/HelpCenter';
 
-const PRIMARY = [
-  ['/recruiter/dashboard', 'Dashboard', 'grid'],
-  ['/recruiter/jobs', 'Jobs', 'briefcase'],
-  ['/recruiter/applications', 'Applications', 'clipboard'],
-  ['/recruiter/interviews', 'Interviews', 'calendar'],
-  ['/recruiter/videos', 'Videos', 'video'],
-  ['/recruiter/messages', 'Messages', 'message'],
+export const GROUPS = [
+  { title: 'Hiring', items: [
+    ['/recruiter/dashboard', 'Dashboard', 'grid'],
+    ['/recruiter/jobs', 'Jobs', 'briefcase'],
+    ['/recruiter/applications', 'Applications', 'clipboard'],
+    ['/recruiter/interviews', 'Interviews', 'calendar'],
+    ['/recruiter/calendar', 'Calendar', 'clock'],
+    ['/recruiter/candidates', 'Candidate pool', 'users'],
+    ['/recruiter/offers', 'Offer letters', 'award'],
+    ['/recruiter/analytics', 'Analytics', 'chart'],
+    ['/recruiter/team', 'Team', 'user'],
+    ['/recruiter/videos', 'Videos', 'video'],
+  ] },
+  { title: 'Communicate', items: [
+    ['/recruiter/messages', 'Messages', 'message'],
+    ['/recruiter/notifications', 'Notifications', 'bell'],
+    ['/recruiter/followers', 'Followers', 'users'],
+  ] },
+  { title: 'Company', items: [
+    ['/recruiter/company', 'Company profile', 'building'],
+    ['/recruiter/account', 'Profile', 'settings'],
+    ['/recruiter/security', 'Account & security', 'shield'],
+    ['/recruiter/help', 'Help & support', 'info'],
+  ] },
 ];
-const SECONDARY = [
-  ['/recruiter/company', 'Company profile', 'building'],
-  ['/recruiter/followers', 'Followers', 'users'],
-  ['/recruiter/notifications', 'Notifications', 'bell'],
-  ['/recruiter/account', 'Account & security', 'settings'],
-];
+const PRIMARY = GROUPS[0].items.concat(GROUPS[1].items.slice(0, 1));
+const SECONDARY = GROUPS[1].items.slice(1).concat(GROUPS[2].items);
+const TABS = GROUPS[0].items.slice(0, 4);
 
 function UserMenu({ user, logout }) {
   const [open, setOpen] = useState(false);
@@ -80,37 +102,74 @@ function Layout({ children }) {
   useEffect(() => { reload(); }, [reload]);
   useEffect(() => setMenu(false), [pathname]);
 
+  const nav = (
+    <>
+      {GROUPS.map((g) => (
+        <div key={g.title} className="r-side-group">
+          <p className="r-side-title">{g.title}</p>
+          {g.items.map(([to, label, ic]) => (
+            <NavLink key={to} to={to} className="r-side-link"><Icon name={ic} size={19} /><span>{label}</span></NavLink>
+          ))}
+        </div>
+      ))}
+    </>
+  );
+
   return (
     <CompanyContext.Provider value={{ company, loading, reload }}>
-      <div className="p-recruiter">
-        <header className="r-nav">
-          <div className="r-nav-inner">
-            <Link to="/recruiter/dashboard" className="r-brand"><Logo size={30} /><span className="r-role">Recruiter</span></Link>
-            <nav className="r-links" aria-label="Main">
-              {PRIMARY.map(([to, label]) => (
-                <NavLink key={to} to={to} className="r-link">{label}</NavLink>
-              ))}
-            </nav>
-            <div className="r-nav-right">
-              {company && <Link to="/recruiter/company" className="r-company-chip hide-mobile" title="Company profile"><Icon name="building" size={14} /><span className="truncate">{company.name}</span></Link>}
-              <NotificationBell to="/recruiter/notifications" className="icon-btn r-bell" />
-              <div className="hide-mobile"><UserMenu user={user} logout={logout} /></div>
+      <div className="p-recruiter r-shell">
+        <aside className="r-side">
+          <div className="r-side-in">
+            <Link to="/recruiter/dashboard" className="r-brand"><Logo size={32} /><span className="r-role">Recruiter</span></Link>
+            {company && <Link to="/recruiter/company" className="r-company-card" title="Company profile"><Icon name="building" size={18} /><span className="truncate">{company.name}</span></Link>}
+            <nav className="r-side-nav" aria-label="Main">{nav}</nav>
+            <div className="r-side-foot">
+              <button type="button" className="r-side-link r-side-logout" onClick={() => logout()}><Icon name="logout" size={19} /><span>Sign out</span></button>
+            </div>
+          </div>
+        </aside>
+
+        <div className="r-content">
+          <header className="r-nav">
+            <div className="r-nav-inner">
               <button type="button" className="icon-btn r-burger only-mobile" aria-label={menu ? 'Close menu' : 'Open menu'} aria-expanded={menu} onClick={() => setMenu((m) => !m)}>
                 <Icon name={menu ? 'x' : 'menu'} size={22} />
               </button>
+              <Link to="/recruiter/dashboard" className="r-brand r-top-brand only-mobile"><Logo size={28} /></Link>
+              <div className="r-nav-right">
+                {company && <Link to="/recruiter/company" className="r-company-chip hide-mobile" title="Company profile"><Icon name="building" size={14} /><span className="truncate">{company.name}</span></Link>}
+                <Link to="/recruiter/messages" className="icon-btn hide-mobile" aria-label="Messages"><Icon name="mail" size={20} /></Link>
+                <NotificationBell to="/recruiter/notifications" className="icon-btn r-bell" />
+                <UserMenu user={user} logout={logout} />
+              </div>
             </div>
-          </div>
-          {menu && (
-            <nav className="r-mobile-menu" aria-label="Mobile">
+          </header>
+          <main className="r-main" id="main"><BannerStrip />{children}</main>
+        </div>
+
+        {menu && (
+          <div className="r-drawer-wrap" onMouseDown={(e) => e.target === e.currentTarget && setMenu(false)}>
+            <div className="r-drawer" role="dialog" aria-modal="true" aria-label="Menu"><nav aria-label="Mobile" className="r-drawer-nav">
               <div className="r-dropdown-head"><strong>{user.name}</strong><span className="muted small">{company ? company.name : user.email}</span></div>
-              {[...PRIMARY, ...SECONDARY].map(([to, label, ic]) => (
-                <NavLink key={to} to={to} className="r-mobile-link"><Icon name={ic || 'grid'} size={18} />{label}</NavLink>
+              {GROUPS.map((g) => (
+                <div key={g.title} className="r-side-group">
+                  <p className="r-side-title">{g.title}</p>
+                  {g.items.map(([to, label, ic]) => (
+                    <NavLink key={to} to={to} className="r-mobile-link"><Icon name={ic} size={18} />{label}</NavLink>
+                  ))}
+                </div>
               ))}
               <button type="button" className="r-mobile-link danger" onClick={() => logout()}><Icon name="logout" size={18} />Sign out</button>
-            </nav>
-          )}
-        </header>
-        <main className="r-main" id="main">{children}</main>
+            </nav></div>
+          </div>
+        )}
+
+        <nav className="r-tabbar" aria-label="Primary">
+          {TABS.map(([to, label, ic]) => (
+            <NavLink key={to} to={to} className="r-tab"><Icon name={ic} size={21} /><span>{label}</span></NavLink>
+          ))}
+          <button type="button" className="r-tab" onClick={() => setMenu(true)} aria-label="More"><Icon name="grid" size={21} /><span>More</span></button>
+        </nav>
       </div>
     </CompanyContext.Provider>
   );
@@ -140,6 +199,13 @@ export default function RecruiterPanel() {
           { path: '/recruiter/messages', element: (<><PageHeader title="Messages" description="Chat with candidates." /><ChatView myId={user.id} /></>) },
           { path: '/recruiter/notifications', element: (<><PageHeader title="Notifications" description="Updates about your jobs, applicants and company." /><NotificationsView role="recruiter" onChange={() => window.dispatchEvent(new Event('carevo:notifications'))} /></>) },
           { path: '/recruiter/account', element: <Account /> },
+          { path: '/recruiter/calendar', element: <Calendar /> },
+          { path: '/recruiter/candidates', element: <Candidates /> },
+          { path: '/recruiter/offers', element: <Offers /> },
+          { path: '/recruiter/analytics', element: <Analytics /> },
+          { path: '/recruiter/team', element: <Team /> },
+          { path: '/recruiter/security', element: <AccountCenter role="recruiter" /> },
+          { path: '/recruiter/help', element: <HelpCenter role="recruiter" /> },
         ]}
       />
     </Layout>

@@ -1,4 +1,5 @@
 // USER (job seeker) panel - end-to-end suite.   node tests/e2e/user.e2e.mjs
+import crypto from 'node:crypto';
 import { URLS, makeApi, suite, assert, chromium, authedContext, watch, uniq, docxBytes } from './lib.mjs';
 
 const { APP, API } = URLS(5203, 8003);
@@ -655,6 +656,123 @@ await S.test('USR-47', 'Private resumes: owner opens via signed link, a stranger
 await S.test('USR-33', 'Unknown route shows a friendly 404 inside the app', async () => {
   await go('/this-page-does-not-exist');
   await page.getByText('Page not found').waitFor();
+});
+
+
+const RZP_SECRET = 'e2e_secret_value';
+const goodSig = (order, pay) => crypto.createHmac('sha256', RZP_SECRET).update(`${order}|${pay}`).digest('hex');
+/** Replace Razorpay's hosted checkout.js with a stub that "pays" (or fails / is dismissed) so the real UI + API flow runs offline. */
+async function stubCheckout(context, mode) {
+  await context.exposeFunction('__sig', (order, pay) => (mode === 'forged' ? 'f'.repeat(64) : goodSig(order, pay)));
+  await context.route('https://checkout.razorpay.com/**', (r) => r.fulfill({ status: 200, contentType: 'application/javascript', body: `
+    window.Razorpay = function (o) { this.o = o; };
+    window.Razorpay.prototype.on = function () {};
+    window.Razorpay.prototype.open = function () {
+      var o = this.o, pay = 'pay_e2e_' + Date.now();
+      if ('${mode}' === 'cancel') { setTimeout(function () { o.modal.ondismiss(); }, 50); return; }
+      window.__sig(o.order_id, pay).then(function (sig) { o.handler({ razorpay_order_id: o.order_id, razorpay_payment_id: pay, razorpay_signature: sig }); });
+    };` }));
+}
+
+let planA;
+await S.test('USR-48', 'Banner/popup targeting: candidate sees candidate banner + scheduled popup; guest and future items stay hidden', async () => {
+  const iso = (h) => new Date(Date.now() + h * 3600e3).toISOString();
+  const T = 'Candidate fest ' + uniq(), F = 'Future promo ' + uniq(), P = 'Premium week ' + uniq();
+  const b = await api.post('/admin/banners', { title: T, audience: 'user', starts_at: iso(-1), ends_at: iso(2) }, adminTok);
+  const f = await api.post('/admin/banners', { title: F, audience: 'all', starts_at: iso(3) }, adminTok);
+  const p = await api.post('/admin/popups', { title: P, message: 'Half price for 7 days', button_label: 'See plans', button_link: 'https://example.com/plans', audience: 'user', frequency: 'once', delay_seconds: 0 }, adminTok);
+  const tok = await api.login(ME.email, ME.pw).catch(async () => (await api.register('Banner Tester', `bt.${uniq()}@example.com`, 'secret123')).token);
+  const c = await authedContext(browser, tok); const u = await c.newPage();
+  await u.goto(APP + '/dashboard'); await u.waitForLoadState('networkidle');
+  await u.getByTestId('banner').filter({ hasText: T }).waitFor();
+  assert((await u.getByText(F).count()) === 0, 'future banner shown too early');
+  const pop = u.getByTestId('popup'); await pop.waitFor();
+  assert((await pop.innerText()).includes('Half price'), 'popup text missing');
+  await u.screenshot({ path: `${SHOTS}/e2e-popup.png` });
+  await pop.getByRole('button', { name: 'Maybe later' }).click();
+  await pop.waitFor({ state: 'detached' });
+  await u.reload(); await u.waitForLoadState('networkidle'); await u.waitForTimeout(800);
+  assert((await u.getByTestId('popup').count()) === 0, 'popup with frequency "once" came back');
+  await u.getByRole('button', { name: `Dismiss ${T}` }).click();
+  assert((await u.getByTestId('banner').filter({ hasText: T }).count()) === 0, 'dismissed banner still visible');
+  await c.close();
+  // visitors (not signed in) get neither the candidate banner nor the candidate popup
+  const g = await browser.newContext(); const gp = await g.newPage();
+  await gp.goto(APP + '/'); await gp.waitForLoadState('networkidle'); await gp.waitForTimeout(800);
+  assert((await gp.getByText(T).count()) === 0 && (await gp.getByTestId('popup').count()) === 0, 'candidate-only items leaked to visitors');
+  await g.close();
+  for (const [k, x] of [['banners', b], ['banners', f], ['popups', p]]) await api.del(`/admin/${k}/${x.id}`, undefined, adminTok);
+});
+
+await S.test('USR-49', 'Visitors see an "everyone" banner on the landing page', async () => {
+  const T = 'Welcome offer ' + uniq();
+  const b = await api.post('/admin/banners', { title: T, text: 'Join free today', audience: 'all', link_url: 'https://example.com/join' }, adminTok);
+  const g = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true }); const gp = await g.newPage();
+  await gp.goto(APP + '/'); await gp.waitForLoadState('networkidle');
+  await gp.getByTestId('banner').filter({ hasText: T }).waitFor();
+  const over = await gp.evaluate(() => document.documentElement.scrollWidth - 390);
+  assert(over <= 1, 'landing overflows with a banner on mobile: ' + over);
+  await gp.screenshot({ path: `${SHOTS}/e2e-banner-landing-mobile.png` });
+  await g.close();
+  await api.del(`/admin/banners/${b.id}`, undefined, adminTok);
+});
+
+await S.test('USR-50', 'Premium plans page lists plans; payment window cancelled -> nothing charged', async () => {
+  planA = await api.post('/admin/plans', { name: 'Pro Monthly ' + uniq(), price: 499, duration_days: 30, features: ['Apply from Reels', 'View recruiter profiles'], is_popular: true }, adminTok);
+  const tok = (await api.register('Payer One', `pay1.${uniq()}@example.com`, 'secret123')).token;
+  const c = await authedContext(browser, tok); await stubCheckout(c, 'cancel'); const u = await c.newPage();
+  await u.goto(APP + '/premium'); await u.waitForLoadState('networkidle');
+  const card = u.getByTestId('plans').locator('.u-plan', { hasText: planA.name });
+  await card.waitFor();
+  assert((await card.innerText()).includes('₹499'), 'price not shown');
+  await card.getByRole('button', { name: /^Buy/ }).click();
+  await u.locator('.toast', { hasText: 'cancelled' }).first().waitFor();
+  assert((await api.get('/users/me/premium', undefined, tok)).is_premium === false, 'cancelled payment activated premium');
+  await c.close();
+});
+
+await S.test('USR-51', 'Forged payment signature is rejected and does not unlock Premium', async () => {
+  const tok = (await api.register('Payer Two', `pay2.${uniq()}@example.com`, 'secret123')).token;
+  const c = await authedContext(browser, tok); await stubCheckout(c, 'forged'); const u = await c.newPage();
+  await u.goto(APP + '/premium'); await u.waitForLoadState('networkidle');
+  await u.getByTestId('plans').locator('.u-plan', { hasText: planA.name }).getByRole('button', { name: /^Buy/ }).click();
+  await u.locator('.toast', { hasText: /verification failed/i }).first().waitFor();
+  assert((await api.get('/users/me/premium', undefined, tok)).is_premium === false, 'forged signature unlocked premium');
+  await c.close();
+});
+
+await S.test('USR-52', 'Buy a plan through Razorpay checkout -> Premium active, history shows Paid, Reels apply unlocked', async () => {
+  const email = `pay3.${uniq()}@example.com`;
+  const tok = (await api.register('Payer Three', email, 'secret123')).token;
+  const c = await authedContext(browser, tok); await stubCheckout(c, 'ok'); const u = await c.newPage();
+  await u.goto(APP + '/premium'); await u.waitForLoadState('networkidle');
+  await u.getByTestId('plans').locator('.u-plan', { hasText: planA.name }).getByRole('button', { name: /^Buy/ }).click();
+  await u.getByTestId('premium-active').waitFor();
+  const row = u.getByTestId('my-payments').locator('tbody tr').first();
+  await row.getByText('paid').waitFor();
+  const st = await api.get('/users/me/premium', undefined, tok);
+  assert(st.is_premium === true && st.premium_until, 'premium not active');
+  await u.goto(APP + '/videos'); await u.waitForLoadState('networkidle');
+  assert((await u.getByText('Apply Access Restricted').count()) === 0, 'lock dialog should not appear for a paying member');
+  await u.screenshot({ path: `${SHOTS}/e2e-premium-active.png` });
+  // admin sees the payment + revenue; refund through the API takes Premium away again
+  const rows = await api.get('/admin/payments?q=' + encodeURIComponent(email), undefined, adminTok);
+  assert(rows.total === 1 && rows.items[0].status === 'paid', 'admin does not see the payment');
+  await api.post(`/admin/payments/${rows.items[0].id}/refund`, { reason: 'e2e' }, adminTok);
+  assert((await api.get('/users/me/premium', undefined, tok)).is_premium === false, 'refund did not end premium');
+  await u.goto(APP + '/premium'); await u.waitForLoadState('networkidle');
+  await u.getByTestId('my-payments').locator('tbody tr').first().getByText('refunded').waitFor();
+  await c.close();
+});
+
+await S.test('USR-53', 'Mobile (390px): premium page has no horizontal overflow', async () => {
+  const tok = (await api.register('Mobile Payer', `pay4.${uniq()}@example.com`, 'secret123')).token;
+  const c = await authedContext(browser, tok, { width: 390, height: 844 }, { isMobile: true, hasTouch: true }); const u = await c.newPage();
+  await u.goto(APP + '/premium'); await u.waitForLoadState('networkidle');
+  const over = await u.evaluate(() => document.documentElement.scrollWidth - 390);
+  assert(over <= 1, 'overflow ' + over);
+  await u.screenshot({ path: `${SHOTS}/e2e-premium-mobile.png` });
+  await c.close();
 });
 
 await S.test('USR-34', 'No console errors / failed requests / 5xx during the whole run', async () => {

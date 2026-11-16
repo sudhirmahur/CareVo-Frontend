@@ -3,6 +3,12 @@ import { JOB_TYPES, fromLocalInput, isHttpUrl, toLocalInput } from '../../lib/fo
 import { Button, Input, Select, TagInput, Textarea } from '../ui';
 import Icon from '../Icon';
 
+const TYPES = [...JOB_TYPES, ...(JOB_TYPES.some((t) => t.value === 'freelance') ? [] : [{ value: 'freelance', label: 'Freelance' }])];
+const MODES = [{ value: 'onsite', label: 'On-site' }, { value: 'hybrid', label: 'Hybrid' }, { value: 'remote', label: 'Remote' }];
+const KINDS = [{ value: 'general', label: 'General' }, { value: 'experience', label: 'Experience' }, { value: 'qualification', label: 'Qualification' }];
+let qSeq = 0;
+const newQ = (q = {}) => ({ key: `q${(qSeq += 1)}`, id: q.id, type: q.type || 'text', question: q.question || '', options: (q.options || []).join(', '), required: q.required ?? true, kind: q.kind || 'general' });
+
 const lines = (arr) => (arr || []).join('\n');
 const toLines = (s) => s.split('\n').map((x) => x.trim()).filter(Boolean);
 
@@ -24,7 +30,11 @@ export default function JobForm({ initial, companies, onSubmit, submitting, subm
     responsibilities: lines(initial?.responsibilities),
     apply_url: initial?.apply_url || '',
     application_deadline: toLocalInput(initial?.application_deadline),
+    work_mode: initial?.work_mode || '',
   }));
+  const [qs, setQs] = useState(() => (initial?.screening_questions || []).map(newQ));
+  const upQ = (key, patch) => setQs((a) => a.map((q) => (q.key === key ? { ...q, ...patch } : q)));
+  const moveQ = (i, d) => setQs((a) => { const b = [...a]; const j = i + d; if (j < 0 || j >= b.length) return a; [b[i], b[j]] = [b[j], b[i]]; return b; });
   const [errors, setErrors] = useState({});
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
 
@@ -39,6 +49,12 @@ export default function JobForm({ initial, companies, onSubmit, submitting, subm
     const hi = f.salary_max === '' ? null : Number(f.salary_max);
     if ((lo !== null && (Number.isNaN(lo) || lo < 0)) || (hi !== null && (Number.isNaN(hi) || hi < 0))) er.salary_min = 'Salary must be a positive number.';
     else if (lo !== null && hi !== null && hi < lo) er.salary_max = 'Max salary must be at least the min salary.';
+    const qErr = {};
+    qs.forEach((q) => {
+      if (q.question.trim().length < 3) qErr[q.key] = 'Write the question (3+ characters).';
+      else if (q.type === 'choice' && q.options.split(',').map((o) => o.trim()).filter(Boolean).length < 2) qErr[q.key] = 'Add at least two options, separated by commas.';
+    });
+    if (Object.keys(qErr).length) er.questions = qErr;
     setErrors(er);
     if (Object.keys(er).length) return;
     const payload = {
@@ -53,6 +69,8 @@ export default function JobForm({ initial, companies, onSubmit, submitting, subm
       responsibilities: toLines(f.responsibilities),
       apply_url: f.apply_url.trim() || null,
       application_deadline: fromLocalInput(f.application_deadline),
+      work_mode: f.work_mode || null,
+      screening_questions: qs.map((q) => ({ ...(q.id ? { id: q.id } : {}), type: q.type, question: q.question.trim(), options: q.type === 'choice' ? q.options.split(',').map((o) => o.trim()).filter(Boolean) : [], required: q.required, kind: q.kind })),
     };
     if (companies) payload.company_id = f.company_id;
     if (initial && !payload.apply_url) payload.clear_apply_url = true;
@@ -69,7 +87,8 @@ export default function JobForm({ initial, companies, onSubmit, submitting, subm
           </div>
         )}
         <Input label="Location" value={f.location} onChange={set('location')} placeholder="City or Remote" />
-        <Select label="Job type" value={f.job_type} onChange={set('job_type')} options={JOB_TYPES} />
+        <Select label="Job type" value={f.job_type} onChange={set('job_type')} options={TYPES} />
+        <Select label="Work mode" value={f.work_mode} onChange={set('work_mode')} placeholder="Not specified" options={MODES} />
         <Input label="Min salary (₹ / year or month)" type="number" min="0" value={f.salary_min} onChange={set('salary_min')} error={errors.salary_min} />
         <Input label="Max salary" type="number" min="0" value={f.salary_max} onChange={set('salary_max')} error={errors.salary_max} />
         <div className="full"><Textarea label="Description" rows={6} value={f.description} onChange={set('description')} error={errors.description} required /></div>
@@ -85,6 +104,27 @@ export default function JobForm({ initial, companies, onSubmit, submitting, subm
         </div>
         <Input label="Application deadline (optional)" type="datetime-local" value={f.application_deadline} onChange={set('application_deadline')} />
       </div>
+      <fieldset className="screening-box" data-testid="screening-editor">
+        <legend>Screening questions</legend>
+        <p className="muted small">Candidates answer these when they apply. You can filter applicants by their answers.</p>
+        {qs.map((q, i) => (
+          <div className="screening-q" key={q.key} data-testid="screening-q">
+            <div className="form-grid">
+              <div className="full"><Input label={`Question ${i + 1}`} value={q.question} onChange={(e) => upQ(q.key, { question: e.target.value })} error={errors.questions?.[q.key]} maxLength={300} /></div>
+              <Select label="Answer type" value={q.type} onChange={(e) => upQ(q.key, { type: e.target.value })} options={[{ value: 'text', label: 'Text' }, { value: 'choice', label: 'Multiple choice' }, { value: 'yesno', label: 'Yes / No' }]} />
+              <Select label="Category" value={q.kind} onChange={(e) => upQ(q.key, { kind: e.target.value })} options={KINDS} />
+              {q.type === 'choice' && <div className="full"><Input label="Options (comma separated)" value={q.options} onChange={(e) => upQ(q.key, { options: e.target.value })} placeholder="Immediate, 30 days, 60 days" /></div>}
+            </div>
+            <div className="row-wrap">
+              <label className="small"><input type="checkbox" checked={q.required} onChange={(e) => upQ(q.key, { required: e.target.checked })} /> Required</label>
+              <Button variant="ghost" size="sm" onClick={() => moveQ(i, -1)} disabled={i === 0} aria-label={`Move question ${i + 1} up`}>Up</Button>
+              <Button variant="ghost" size="sm" onClick={() => moveQ(i, 1)} disabled={i === qs.length - 1} aria-label={`Move question ${i + 1} down`}>Down</Button>
+              <Button variant="ghost" size="sm" icon="trash" onClick={() => setQs((a) => a.filter((x) => x.key !== q.key))} aria-label={`Remove question ${i + 1}`}>Remove</Button>
+            </div>
+          </div>
+        ))}
+        {qs.length < 10 && <Button variant="secondary" size="sm" icon="plus" onClick={() => setQs((a) => [...a, newQ()])}>Add question</Button>}
+      </fieldset>
       <div className="row" style={{ justifyContent: 'flex-end' }}>
         {onCancel && <Button variant="ghost" onClick={onCancel}>Cancel</Button>}
         <Button type="submit" loading={submitting}>{submitLabel}</Button>

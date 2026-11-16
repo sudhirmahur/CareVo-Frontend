@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, errorMessage } from '../../lib/api';
+import { API_BASE, api, errorMessage, tokenStore } from '../../lib/api';
 import { useAsync, useDebounce } from '../../lib/hooks';
 import { useSearchParams } from '../../lib/router';
 import { useToast } from '../../lib/toast';
@@ -99,3 +99,50 @@ import Icon from '../../components/Icon';
 const IconSvg = ({ name }) => <Icon name={name} size={17} />;
 
 export { Button };
+
+/** Authenticated file download (CSV / XLSX / PDF): fetch with the bearer token, then save the blob. */
+export async function downloadFile(path, filename, params = {}) {
+  const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== '' && v != null)).toString();
+  const res = await fetch(`${API_BASE}${path}${qs ? `?${qs}` : ''}`, { headers: { Authorization: `Bearer ${tokenStore.get()}` } });
+  if (!res.ok) {
+    let msg = `Download failed (${res.status})`;
+    try { const j = await res.json(); if (typeof j.detail === 'string') msg = j.detail; } catch { /* keep default */ }
+    throw new Error(msg);
+  }
+  const url = URL.createObjectURL(await res.blob());
+  const a = Object.assign(document.createElement('a'), { href: url, download: filename });
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+
+/** Download button with toast feedback. */
+export function DownloadBtn({ path, filename, params, children, icon = 'download', variant = 'secondary', ...rest }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  return (
+    <Button variant={variant} icon={icon} loading={busy} onClick={async () => { setBusy(true); try { await downloadFile(path, filename, params); toast.success('Download started'); } catch (e) { toast.error(e.message); } finally { setBusy(false); } }} {...rest}>{children}</Button>
+  );
+}
+
+/** Dependency-free SVG line chart. series: [{name, values, color}], labels: string[] */
+export function LineChart({ labels, series, height = 180, ariaLabel = 'Line chart', format = (v) => v }) {
+  const W = 600, H = height, P = { l: 8, r: 8, t: 14, b: 22 };
+  const max = Math.max(1, ...series.flatMap((s) => s.values));
+  const n = Math.max(1, labels.length - 1);
+  const x = (i) => P.l + (i / n) * (W - P.l - P.r);
+  const y = (v) => H - P.b - (v / max) * (H - P.t - P.b);
+  const step = Math.max(1, Math.ceil(labels.length / 6));
+  return (
+    <div className="ad-line" role="img" aria-label={ariaLabel}>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', height }}>
+        {[0, 0.5, 1].map((t) => <line key={t} x1={P.l} x2={W - P.r} y1={y(max * t)} y2={y(max * t)} stroke="var(--border)" strokeWidth="1" />)}
+        {series.map((s) => (
+          <polyline key={s.name} fill="none" stroke={s.color || 'var(--brand)'} strokeWidth="2.2" strokeLinejoin="round" points={s.values.map((v, i) => `${x(i)},${y(v)}`).join(' ')} />
+        ))}
+        {labels.map((l, i) => (i % step === 0 ? <text key={l} x={x(i)} y={H - 6} fontSize="10" textAnchor="middle" fill="var(--muted)">{l.slice(5) || l}</text> : null))}
+      </svg>
+      <div className="ad-line-legend">
+        {series.map((s) => <span key={s.name}><i style={{ background: s.color || 'var(--brand)' }} />{s.name}: <b>{format(s.values.reduce((a, b) => a + b, 0))}</b></span>)}
+      </div>
+    </div>
+  );
+}

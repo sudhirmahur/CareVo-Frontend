@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
+import { api } from '../../lib/api';
 import { Link, NavLink, Routes, useLocation } from '../../lib/router';
 import Icon from '../../components/Icon';
 import ChatView from '../../components/shared/ChatView';
@@ -17,6 +18,14 @@ import Landing from './pages/Landing';
 import Learning from './pages/Learning';
 import AuditLog from './pages/AuditLog';
 import Jobs from './pages/Jobs';
+import Payments from './pages/Payments';
+import Support from './pages/Support';
+import Roles from './pages/Roles';
+import Emails from './pages/Emails';
+import Revenue from './pages/Revenue';
+import Health from './pages/Health';
+import Data from './pages/Data';
+import Events from './pages/Events';
 import Recruiters from './pages/Recruiters';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
@@ -29,14 +38,18 @@ const NAV = [
   { group: 'Overview', items: [['/admin/dashboard', 'Dashboard', 'grid']] },
   { group: 'People', items: [['/admin/users', 'Users', 'users'], ['/admin/recruiters', 'Recruiters', 'user'], ['/admin/companies', 'Companies', 'building']] },
   { group: 'Content', items: [['/admin/jobs', 'Jobs', 'briefcase'], ['/admin/applications', 'Applications', 'clipboard'], ['/admin/interviews', 'Interviews', 'calendar'], ['/admin/videos', 'Videos', 'video'], ['/admin/reports', 'Reports', 'flag']] },
-  { group: 'Platform', items: [['/admin/landing', 'Landing page', 'home'], ['/admin/skills', 'Skills & categories', 'sparkles'], ['/admin/learning', 'Prep & assessments', 'book'], ['/admin/banners', 'Banners', 'layers'], ['/admin/broadcast', 'Broadcast', 'send'], ['/admin/messages', 'Messages', 'message'], ['/admin/settings', 'Settings', 'settings'], ['/admin/audit', 'Audit log', 'shield'], ['/admin/account', 'My account', 'lock']] },
+  { group: 'Platform', items: [['/admin/landing', 'Landing page', 'home'], ['/admin/skills', 'Skills & categories', 'sparkles'], ['/admin/learning', 'Prep & assessments', 'book'], ['/admin/banners', 'Banners & popups', 'layers'], ['/admin/payments', 'Payments & plans', 'dollar'], ['/admin/analytics', 'Revenue & growth', 'chart'], ['/admin/support', 'Support & feedback', 'inbox'], ['/admin/events', 'Events & requests', 'calendar'], ['/admin/emails', 'Email templates', 'mail'], ['/admin/roles', 'Roles & admins', 'shield'], ['/admin/health', 'System health', 'zap'], ['/admin/data', 'Data & backups', 'download'], ['/admin/broadcast', 'Broadcast', 'send'], ['/admin/messages', 'Messages', 'message'], ['/admin/settings', 'Settings', 'settings'], ['/admin/audit', 'Audit log', 'shield'], ['/admin/account', 'My account', 'lock']] },
 ];
+const MODULE = { dashboard: 'dashboard', users: 'users', recruiters: 'recruiters', companies: 'companies', jobs: 'jobs', applications: 'applications', interviews: 'interviews', videos: 'videos', reports: 'reports', landing: 'content', skills: 'skills', learning: 'content', banners: 'content', payments: 'payments', analytics: 'analytics', support: 'support', events: 'content', emails: 'emails', roles: 'roles', health: 'system', data: 'system', audit: 'system', settings: 'settings', broadcast: 'content' };
 const TABS = [['/admin/dashboard', 'Home', 'grid'], ['/admin/users', 'Users', 'users'], ['/admin/jobs', 'Jobs', 'briefcase'], ['/admin/reports', 'Reports', 'flag']];
 
 export default function AdminPanel() {
   const { user, logout } = useAuth();
   const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
+  const [perm, setPerm] = useState(null);
+  useEffect(() => { api.get('/admin/me/permissions').then(setPerm).catch(() => {}); }, []);
+  const allowed = (to) => { const m = MODULE[to.split('/')[2]]; return !perm || !m || perm.permissions[m]?.read !== false; };
   useEffect(() => { setOpen(false); }, [pathname]);
   useEffect(() => {
     document.body.classList.toggle('modal-open', open);
@@ -59,6 +72,14 @@ export default function AdminPanel() {
     { path: '/admin/learning', element: <Learning /> },
     { path: '/admin/audit', element: <AuditLog /> },
     { path: '/admin/banners', element: <Banners /> },
+    { path: '/admin/payments', element: <Payments /> },
+    { path: '/admin/analytics', element: <Revenue /> },
+    { path: '/admin/support', element: <Support /> },
+    { path: '/admin/events', element: <Events /> },
+    { path: '/admin/emails', element: <Emails /> },
+    { path: '/admin/roles', element: <Roles /> },
+    { path: '/admin/health', element: <Health /> },
+    { path: '/admin/data', element: <Data /> },
     { path: '/admin/broadcast', element: <Broadcast /> },
     { path: '/admin/settings', element: <Settings /> },
     { path: '/admin/account', element: <Account /> },
@@ -70,7 +91,7 @@ export default function AdminPanel() {
     <>
       <Link to="/admin/dashboard" className="a-brand"><Logo size={32} /><span className="a-role">Admin</span></Link>
       <nav className="a-nav" aria-label="Admin">
-        {NAV.map((g) => (
+        {NAV.map((g) => ({ ...g, items: g.items.filter(([to]) => allowed(to)) })).filter((g) => g.items.length).map((g) => (
           <div className="a-group" key={g.group}>
             <div className="a-group-title">{g.group}</div>
             {g.items.map(([to, label, ic]) => (

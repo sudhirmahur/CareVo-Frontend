@@ -37,13 +37,20 @@ export function AuthProvider({ children }) {
   }, []);
 
   const finishAuth = useCallback((data, remember = true) => {
+    // second step needed: hand the challenge back to the caller instead of signing in
+    if (data && data.requires_2fa) return { requires_2fa: true, method: data.method, challenge_token: data.challenge_token, dev_code: data.dev_code };
     tokenStore.set(data.access_token, remember);
     setUser(data.user);
     return data.user;
   }, []);
 
   const login = useCallback(async (email, password, remember = true) => finishAuth(await api.post('/auth/login', { email, password }, { auth: false }), remember), [finishAuth]);
-  const loginWithGoogle = useCallback(async (credential, remember = true, role = 'user') => finishAuth(await api.post('/auth/google', { access_token: credential, role }, { auth: false }), remember), [finishAuth]);
+  const verify2fa = useCallback(async (challengeToken, code, remember = true) => finishAuth(await api.post('/auth/2fa/verify', { challenge_token: challengeToken, code: String(code).trim() }, { auth: false }), remember), [finishAuth]);
+  const loginWithGoogle = useCallback(async (credential, remember = true, role = 'user') => {
+    const r = await api.post('/auth/google', { access_token: credential, role }, { auth: false });
+    if (r && r.requires_2fa) throw new Error('This account uses two-step verification. Please sign in with your email and password.');
+    return finishAuth(r, remember);
+  }, [finishAuth]);
   const register = useCallback(async (payload) => finishAuth(await api.post('/auth/register', payload, { auth: false })), [finishAuth]);
   const refreshUser = useCallback(async () => {
     const u = await api.get('/auth/me');
@@ -52,8 +59,8 @@ export function AuthProvider({ children }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, login, loginWithGoogle, register, logout, refreshUser, isAuthenticated: Boolean(user) }),
-    [user, loading, login, loginWithGoogle, register, logout, refreshUser],
+    () => ({ user, loading, login, verify2fa, loginWithGoogle, register, logout, refreshUser, isAuthenticated: Boolean(user) }),
+    [user, loading, login, verify2fa, loginWithGoogle, register, logout, refreshUser],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

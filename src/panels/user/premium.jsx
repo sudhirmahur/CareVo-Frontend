@@ -4,6 +4,7 @@ import { useAsync } from '../../lib/hooks';
 import { useToast } from '../../lib/toast';
 import Icon from '../../components/Icon';
 import { Button, Modal } from '../../components/ui';
+import { Link } from '../../lib/router';
 
 const Ctx = createContext(null);
 
@@ -23,6 +24,8 @@ const COPY = {
 export function PremiumProvider({ children }) {
   const toast = useToast();
   const status = useAsync(() => api.get('/users/me/premium'), []);
+  const plans = useAsync(() => api.get('/plans'), []);
+  const canBuy = Boolean(plans.data?.payments_enabled && plans.data?.items?.length);
   const [open, setOpen] = useState(null); // 'apply' | 'recruiter' | 'generic' | null
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -62,6 +65,8 @@ export function PremiumProvider({ children }) {
             </ul>
             {pending ? (
               <p className="form-ok" role="status">Request received. Our team will activate Premium for you soon.</p>
+            ) : canBuy ? (
+              <Link to="/premium" className="btn btn-primary btn-lg btn-block" onClick={close}><Icon name="crown" size={18} /> View Premium plans</Link>
             ) : (
               <Button size="lg" icon="crown" loading={busy} onClick={request} className="btn-block">Upgrade to Premium</Button>
             )}

@@ -7,6 +7,8 @@ import { useToast } from '../../lib/toast';
 import Icon from '../../components/Icon';
 import { Avatar, Badge, Button, Modal, Select, SkillChips, Spinner, Textarea } from '../../components/ui';
 
+export const WORK_MODE = { remote: 'Remote', hybrid: 'Hybrid', onsite: 'On-site' };
+
 /* ---------------------------------------------------------------- apply */
 
 /**
@@ -84,16 +86,24 @@ export function ApplyModal({ job, onClose, onDone }) {
   const [cover, setCover] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [answers, setAnswers] = useState({});
+  const [qErrors, setQErrors] = useState({});
+  const full = useAsync(() => (job.screening_questions ? Promise.resolve(job) : api.get(`/jobs/${job.id}`)), [job.id]);
+  const questions = full.data?.screening_questions || [];
 
   useEffect(() => {
     if (!resumeId && list.length) setResumeId((list.find((r) => r.is_default) || list[0]).id);
   }, [list, resumeId]);
 
   const submit = async () => {
+    const missing = {};
+    questions.forEach((q) => { if (q.required !== false && !String(answers[q.id] || '').trim()) missing[q.id] = 'This question is required'; });
+    setQErrors(missing);
+    if (Object.keys(missing).length) { setError('Please answer the required questions'); return; }
     setBusy(true);
     setError('');
     try {
-      const res = await api.post(`/jobs/${job.id}/apply`, { resume_id: resumeId || undefined, cover_letter: cover.trim() || undefined });
+      const res = await api.post(`/jobs/${job.id}/apply`, { resume_id: resumeId || undefined, cover_letter: cover.trim() || undefined, answers: Object.fromEntries(Object.entries(answers).filter(([, v]) => String(v).trim())) });
       toast.success(res.already_applied ? 'You have already applied for this job' : 'Application submitted');
       onDone(res);
     } catch (e) {
@@ -105,7 +115,7 @@ export function ApplyModal({ job, onClose, onDone }) {
 
   return (
     <Modal title={`Apply to ${job.title}`} description={job.company_name} onClose={onClose}
-      footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button loading={busy} onClick={submit} disabled={resumes.loading || !resumeId}>Submit application</Button></>}>
+      footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button loading={busy} onClick={submit} disabled={resumes.loading || full.loading || !resumeId}>Submit application</Button></>}>
       {resumes.loading && <div className="u-center"><Spinner /></div>}
       {resumes.error && <p className="form-error">{resumes.error}</p>}
       {!resumes.loading && !resumes.error && list.length === 0 && (
@@ -115,6 +125,19 @@ export function ApplyModal({ job, onClose, onDone }) {
         <div className="stack">
           <Select label="Resume" value={resumeId} onChange={(e) => setResumeId(e.target.value)} options={list.map((r) => ({ value: r.id, label: r.is_default ? `${r.name} (default)` : r.name }))} />
           <Textarea label="Cover letter (optional)" value={cover} onChange={(e) => setCover(e.target.value)} maxLength={5000} placeholder="Tell the recruiter why you are a great fit." />
+          {questions.length > 0 && (
+            <fieldset className="screening" data-testid="screening">
+              <legend>Screening questions</legend>
+              {questions.map((q) => {
+                const set = (v) => setAnswers((a) => ({ ...a, [q.id]: v }));
+                const err = qErrors[q.id];
+                const label = `${q.question}${q.required !== false ? ' *' : ''}`;
+                if (q.type === 'text') return <Textarea key={q.id} label={label} rows={2} maxLength={1000} value={answers[q.id] || ''} onChange={(e) => set(e.target.value)} error={err} />;
+                const opts = q.type === 'yesno' ? ['Yes', 'No'] : q.options || [];
+                return <Select key={q.id} label={label} value={answers[q.id] || ''} onChange={(e) => set(e.target.value)} error={err} options={[{ value: '', label: 'Select an answer' }, ...opts.map((o) => ({ value: o, label: o }))]} />;
+              })}
+            </fieldset>
+          )}
           {error && <p className="form-error" role="alert">{error}</p>}
         </div>
       )}
@@ -163,6 +186,7 @@ export function JobCard({ job, onApply, onToggleSave, busy }) {
       <ul className="u-meta">
         {job.location && <li><Icon name="mapPin" size={14} /> {job.location}</li>}
         <li><Icon name="briefcase" size={14} /> {jobTypeLabel(job.job_type)}</li>
+        {job.work_mode && <li data-testid="work-mode"><Icon name="globe" size={14} /> {WORK_MODE[job.work_mode] || job.work_mode}</li>}
         {salary && <li><Icon name="dollar" size={14} /> {salary}</li>}
         {job.is_featured && <li className="u-feat"><Icon name="star" size={14} /> Featured</li>}
       </ul>

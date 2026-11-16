@@ -1,3 +1,4 @@
+import { BannerStrip } from '../../components/shared/Announcements';
 import { useEffect, useMemo, useState } from 'react';
 import { api, assetUrl, errorMessage, safeHref } from '../../lib/api';
 import { ROLE_HOME, useAuth } from '../../lib/auth';
@@ -385,6 +386,7 @@ export default function Landing() {
   void loading;
   return (
     <div className="lp">
+      <BannerStrip className="lp-ann" />
       <SiteNav site={site} />
       <main>
         <Hero site={site} />

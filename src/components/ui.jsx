@@ -129,7 +129,7 @@ export function Avatar({ name, src, size = 40, className }) {
       <span className="avatar-initials">{initials(name)}</span>
     </span>
   );
-}   
+}
 
 export function Card({ title, subtitle, actions, children, className, padded = true, as: Tag = 'section', ...rest }) {
   return (

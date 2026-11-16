@@ -1,3 +1,4 @@
+import { BannerStrip } from '../../components/shared/Announcements';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import { useAsync } from '../../lib/hooks';
@@ -8,6 +9,13 @@ import ChatView from '../../components/shared/ChatView';
 import NotificationBell, { refreshBell } from '../../components/shared/NotificationBell';
 import NotificationsView from '../../components/shared/NotificationsView';
 import { Avatar, Logo, PageHeader } from '../../components/ui';
+import AccountCenter from '../../components/shared/AccountCenter';
+import HelpCenter from '../../components/shared/HelpCenter';
+import Alerts from './pages/Alerts';
+import Documents from './pages/Documents';
+import Events from './pages/Events';
+import Offers from './pages/Offers';
+import Referrals from './pages/Referrals';
 import Applications from './pages/Applications';
 import Assessments, { AssessmentTake } from './pages/Assessments';
 import { Companies, CompanyDetail } from './pages/Companies';
@@ -25,6 +33,7 @@ import Resume from './pages/Resume';
 import ResumeBuilder from './pages/ResumeBuilder';
 import SavedJobs from './pages/SavedJobs';
 import Settings from './pages/Settings';
+import PremiumPlans from './pages/PremiumPlans';
 import Skills from './pages/Skills';
 import './user.css';
 import './user-shell.css';
@@ -37,12 +46,21 @@ export const NAV = [
   { to: '/saved', label: 'Saved Jobs', icon: 'bookmark' },
   { to: '/companies', label: 'Companies', icon: 'building' },
   { to: '/interviews', label: 'Interviews', icon: 'calendar' },
+  { to: '/offers', label: 'Job Offers', icon: 'award' },
+  { to: '/alerts', label: 'Job Alerts', icon: 'zap' },
+  { to: '/following', label: 'Following', icon: 'heart' },
+  { to: '/events', label: 'Events & Webinars', icon: 'video' },
+  { to: '/documents', label: 'My Documents', icon: 'layers' },
+  { to: '/referrals', label: 'Refer & Earn', icon: 'share' },
   { to: '/prep', label: 'Interview Prep', icon: 'book' },
   { to: '/assessments', label: 'Skill Assessments', icon: 'award' },
   { to: '/messages', label: 'Messages', icon: 'message' },
   { to: '/notifications', label: 'Notifications', icon: 'bell' },
   { to: '/profile', label: 'Profile', icon: 'user' },
   { to: '/resume-builder', label: 'Resume Builder', icon: 'file' },
+  { to: '/premium', label: 'Premium', icon: 'crown' },
+  { to: '/account', label: 'Account & Security', icon: 'shield' },
+  { to: '/help', label: 'Help & Support', icon: 'info' },
   { to: '/settings', label: 'Settings', icon: 'settings' },
 ];
 const TABS = [NAV[0], NAV[1], NAV[2], NAV[3]];
@@ -108,12 +126,20 @@ export default function UserPanel() {
     { path: '/resume-builder', element: <ResumeBuilder /> },
     { path: '/profile', element: <Profile /> },
     { path: '/settings', element: <Settings /> },
+    { path: '/premium', element: <PremiumPlans /> },
     { path: '/skills', element: <Skills /> },
     { path: '/prep', element: <Prep /> },
     { path: '/assessments', element: <Assessments /> },
     { path: '/assessments/:id', element: <AssessmentTake /> },
     { path: '/interviews', element: <Interviews /> },
     { path: '/following', element: <Following /> },
+    { path: '/alerts', element: <Alerts /> },
+    { path: '/documents', element: <Documents /> },
+    { path: '/referrals', element: <Referrals /> },
+    { path: '/events', element: <Events /> },
+    { path: '/offers', element: <Offers /> },
+    { path: '/account', element: <AccountCenter role="user" /> },
+    { path: '/help', element: <HelpCenter role="user" /> },
     { path: '/messages', element: (<><PageHeader title="Messages" description="Chat with recruiters." /><ChatView myId={user.id} /></>) },
     { path: '/notifications', element: (<><PageHeader title="Notifications" /><NotificationsView role="user" onChange={refreshBell} /></>) },
   ];
@@ -141,6 +167,7 @@ export default function UserPanel() {
           </div>
         </header>
         <main className={`u-main ${reels ? 'u-main-wide' : ''}`} id="main">
+          {!reels && <BannerStrip />}
           <Routes routes={routes} fallback={<NotFound />} />
         </main>
       </div>

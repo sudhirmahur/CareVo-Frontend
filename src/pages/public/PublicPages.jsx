@@ -162,9 +162,11 @@ function useAuthPage() {
 /* ------------------------------------------------------------------- login */
 
 export function Login() {
-  const { login } = useAuth();
+  const { login, verify2fa } = useAuth();
   const { site, redirect } = useAuthPage();
   const [params] = useSearchParams();
+  const [challenge, setChallenge] = useState(null);
+  const [code, setCode] = useState('');
   const navigate = useNavigate();
   const [f, setF] = useState({ email: '', password: '' });
   const [remember, setRemember] = useState(true);
@@ -186,7 +188,8 @@ export function Login() {
     if (Object.keys(er).length) return;
     setBusy(true);
     try {
-      await login(f.email.trim(), f.password, remember);
+      const r = await login(f.email.trim(), f.password, remember);
+      if (r && r.requires_2fa) { setChallenge(r); setCode(''); return; }
       const next = params.get('next');
       if (next) navigate(next, { replace: true });
     } catch (err) {
@@ -195,6 +198,36 @@ export function Login() {
       setBusy(false);
     }
   };
+
+  const submitCode = async (e) => {
+    e.preventDefault();
+    setFormError('');
+    if (!/^\d{4,8}$/.test(code.trim())) return setFormError('Enter the 6-digit code.');
+    setBusy(true);
+    try {
+      await verify2fa(challenge.challenge_token, code, remember);
+      const next = params.get('next');
+      if (next) navigate(next, { replace: true });
+    } catch (err) {
+      setFormError(errorMessage(err));
+      if (/expired|start again|Too many/i.test(errorMessage(err))) setChallenge(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (challenge) {
+    return (
+      <AuthShell site={site.data.content} title="Two-step verification" subtitle={challenge.method === 'totp' ? 'Open your authenticator app and enter the 6-digit code.' : 'We sent a 6-digit code to your email.'}
+        footer={<button type="button" className="linklike" onClick={() => { setChallenge(null); setFormError(''); }}>Back to login</button>}>
+        <form className="stack" onSubmit={submitCode} noValidate data-testid="2fa-form">
+          {formError && <p className="form-error" role="alert">{formError}</p>}
+          <Input label="Verification code" inputMode="numeric" autoComplete="one-time-code" maxLength={8} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} placeholder="123456" />
+          <Button type="submit" size="lg" loading={busy} className="btn-block au-submit">Verify and sign in</Button>
+        </form>
+      </AuthShell>
+    );
+  }
 
   return (
     <AuthShell
@@ -224,6 +257,7 @@ export function Register() {
   const { register } = useAuth();
   const { site, redirect } = useAuthPage();
   const [qs] = useSearchParams();
+  const refCode = (qs.get('ref') || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
   const [f, setF] = useState({ name: '', email: '', phone: '', password: '', role: qs.get('as') === 'recruiter' ? 'recruiter' : 'user' });
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState('');
@@ -244,7 +278,7 @@ export function Register() {
     if (Object.keys(er).length) return;
     setBusy(true);
     try {
-      await register({ name: f.name.trim(), email: f.email.trim(), phone: f.phone.trim() || undefined, password: f.password, role: f.role });
+      await register({ name: f.name.trim(), email: f.email.trim(), phone: f.phone.trim() || undefined, password: f.password, role: f.role, referral_code: refCode || undefined });
     } catch (err) {
       setFormError(errorMessage(err));
     } finally {
@@ -262,6 +296,7 @@ export function Register() {
     >
       <form className="stack" onSubmit={submit} noValidate>
         {formError && <p className="form-error" role="alert">{formError}</p>}
+        {refCode && <p className="form-ok" role="status" data-testid="ref-hint">You were invited with code <strong>{refCode}</strong>. Your friend gets a reward when you join.</p>}
         <div className="role-pick" role="radiogroup" aria-label="I am a">
           {[['user', 'briefcase', 'Job seeker', 'Find and apply to jobs'], ['recruiter', 'building', 'Recruiter', 'Post jobs and hire']].map(([v, ic, t, d]) => (
             <label key={v} className={`role-card ${f.role === v ? 'active' : ''}`}>

@@ -282,3 +282,32 @@ button { font-family: inherit; }
 .bubble-media audio { width: 100%; max-width: 260px; }
 .chat-attach { display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-top: 1px solid var(--border); font-size: .85rem; color: var(--muted); }
 .chat-compose .input { min-width: 0; flex: 1; }
+
+/* ---- announcements: banners + popups ---- */
+.ann-strip { display: grid; gap: 8px; margin: 0 0 16px; }
+.ann-banner { position: relative; display: flex; align-items: center; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
+.ann-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 10px 44px 10px 14px; color: inherit; }
+a.ann-main:hover { text-decoration: none; filter: brightness(.98); }
+.ann-img { width: 56px; height: 40px; object-fit: cover; border-radius: 8px; flex: none; }
+.ann-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ann-cta { flex: none; display: inline-flex; align-items: center; gap: 4px; font-weight: 700; font-size: .86rem; }
+.ann-x { position: absolute; top: 50%; right: 8px; transform: translateY(-50%); width: 30px; height: 30px; border: 0; background: transparent; color: inherit; border-radius: 8px; cursor: pointer; display: grid; place-items: center; opacity: .75; }
+.ann-x:hover { opacity: 1; background: rgba(0,0,0,.07); }
+.ann-promo { background: linear-gradient(90deg, #1d4ed8, #3b82f6); color: #fff; border-color: transparent; }
+.ann-info { background: var(--info-soft); color: var(--info); border-color: transparent; }
+.ann-success { background: var(--success-soft); color: var(--success); border-color: transparent; }
+.ann-warning { background: var(--warning-soft); color: var(--warning); border-color: transparent; }
+.ann-overlay { position: fixed; inset: 0; z-index: 1100; display: grid; place-items: center; padding: 16px; background: rgba(10,14,25,.55); backdrop-filter: blur(2px); animation: fade .15s; }
+.ann-popup { position: relative; width: 100%; max-width: 440px; max-height: 90vh; overflow: auto; background: var(--surface); border-radius: 18px; box-shadow: var(--shadow-lg); }
+.ann-pop-img { display: block; width: 100%; max-height: 220px; object-fit: cover; }
+.ann-pop-body { padding: 22px 22px 20px; }
+.ann-pop-body h2 { margin: 0 0 8px; font-size: 1.25rem; }
+.ann-pop-body p { margin: 0 0 18px; color: var(--muted); white-space: pre-line; overflow-wrap: anywhere; }
+.ann-pop-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.ann-pop-x { position: absolute; top: 10px; right: 10px; z-index: 1; width: 34px; height: 34px; border: 0; border-radius: 50%; background: rgba(255,255,255,.92); box-shadow: var(--shadow); cursor: pointer; display: grid; place-items: center; }
+@media (max-width: 640px) {
+  .ann-img { display: none; }
+  .ann-cta { display: none; }
+  .ann-overlay { align-items: end; padding: 0; }
+  .ann-popup { max-width: none; border-radius: 18px 18px 0 0; }
+}

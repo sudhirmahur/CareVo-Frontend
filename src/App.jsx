@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { ROLE_HOME, useAuth } from './lib/auth';
 import { Navigate, Routes, useLocation } from './lib/router';
 import { Spinner } from './components/ui';
+import { PopupHost } from './components/shared/Announcements';
 import { Landing, Login, Register, ForgotPassword, ResetPassword, LegalPage } from './pages/public/PublicPages';
 
 // Each role gets its own panel (own layout, own stylesheet, loaded only when needed).
@@ -24,8 +25,10 @@ function Guard({ role, children }) {
 
 export default function App() {
   const { pathname } = useLocation();
+  const isAdmin = pathname === '/admin' || pathname.startsWith('/admin/');
   return (
     <Suspense fallback={<Loader />}>
+      {!isAdmin && <PopupHost />}
       {pathname === '/admin' || pathname.startsWith('/admin/') ? (
         <Guard role="admin"><AdminPanel /></Guard>
       ) : pathname === '/recruiter' || pathname.startsWith('/recruiter/') ? (
