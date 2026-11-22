@@ -62,7 +62,7 @@ function VideoModal({ video, onClose, onPatch, commentsOnly = false }) {
   const items = comments.data?.items || [];
   return (
     <Modal title={video.title} description={[video.company_name, titleCase(video.type)].filter(Boolean).join(' · ')} size="lg" onClose={onClose}>
-      {!commentsOnly && <VideoPlayer url={video.video_url} poster={video.thumbnail_url} title={video.title} />}
+      {!commentsOnly && <VideoPlayer url={video.video_url} playbackUrl={video.playback_url} poster={video.poster_url || video.thumbnail_url} title={video.title} />}
       {!commentsOnly && video.description && <p className="muted" style={{ marginTop: 10 }}>{video.description}</p>}
       <div className="row-wrap u-vactions">
         <Button variant={video.is_liked ? 'soft' : 'secondary'} icon="heart" onClick={() => toggle('like')} aria-pressed={!!video.is_liked}>{video.is_liked ? 'Liked' : 'Like'} · {video.likes_count}</Button>

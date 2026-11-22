@@ -1,3 +1,4 @@
+import QuestionFields, { cleanAnswers, validateAnswers } from '../../components/shared/QuestionFields';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, errorMessage } from '../../lib/api';
 import { jobTypeLabel, salaryRange, timeAgo } from '../../lib/format';
@@ -96,14 +97,13 @@ export function ApplyModal({ job, onClose, onDone }) {
   }, [list, resumeId]);
 
   const submit = async () => {
-    const missing = {};
-    questions.forEach((q) => { if (q.required !== false && !String(answers[q.id] || '').trim()) missing[q.id] = 'This question is required'; });
+    const missing = validateAnswers(questions, answers);
     setQErrors(missing);
     if (Object.keys(missing).length) { setError('Please answer the required questions'); return; }
     setBusy(true);
     setError('');
     try {
-      const res = await api.post(`/jobs/${job.id}/apply`, { resume_id: resumeId || undefined, cover_letter: cover.trim() || undefined, answers: Object.fromEntries(Object.entries(answers).filter(([, v]) => String(v).trim())) });
+      const res = await api.post(`/jobs/${job.id}/apply`, { resume_id: resumeId || undefined, cover_letter: cover.trim() || undefined, answers: cleanAnswers(answers) });
       toast.success(res.already_applied ? 'You have already applied for this job' : 'Application submitted');
       onDone(res);
     } catch (e) {
@@ -128,14 +128,7 @@ export function ApplyModal({ job, onClose, onDone }) {
           {questions.length > 0 && (
             <fieldset className="screening" data-testid="screening">
               <legend>Screening questions</legend>
-              {questions.map((q) => {
-                const set = (v) => setAnswers((a) => ({ ...a, [q.id]: v }));
-                const err = qErrors[q.id];
-                const label = `${q.question}${q.required !== false ? ' *' : ''}`;
-                if (q.type === 'text') return <Textarea key={q.id} label={label} rows={2} maxLength={1000} value={answers[q.id] || ''} onChange={(e) => set(e.target.value)} error={err} />;
-                const opts = q.type === 'yesno' ? ['Yes', 'No'] : q.options || [];
-                return <Select key={q.id} label={label} value={answers[q.id] || ''} onChange={(e) => set(e.target.value)} error={err} options={[{ value: '', label: 'Select an answer' }, ...opts.map((o) => ({ value: o, label: o }))]} />;
-              })}
+              <QuestionFields questions={questions} answers={answers} errors={qErrors} jobId={job.id} onChange={(id, v) => setAnswers((a) => ({ ...a, [id]: v }))} />
             </fieldset>
           )}
           {error && <p className="form-error" role="alert">{error}</p>}

@@ -317,11 +317,11 @@ await S.test('USR-24', 'Job Reels: layout, like, save, comment, delete comment, 
   assert((await page.getByTestId('reel-thumb').count()) >= 3, 'thumbnail column should list reels');
   await page.getByTestId('reel-job').waitFor();
   await page.getByTestId('reel-recruiter').waitFor();
-  const stage = page.locator('.rl-stage');
+  const stage = page.locator('.rl-stage.is-active');
   await stage.getByRole('button', { name: 'Like' }).click();
-  await page.waitForFunction(() => document.querySelector('.rl-actions button[aria-label=Like]').getAttribute('aria-pressed') === 'true');
+  await page.waitForFunction(() => document.querySelector('.rl-stage.is-active .rl-actions button[aria-label=Like]').getAttribute('aria-pressed') === 'true');
   await stage.getByRole('button', { name: 'Save', exact: true }).click();
-  await page.waitForFunction(() => document.querySelector('.rl-actions button[aria-label=Save]').getAttribute('aria-pressed') === 'true');
+  await page.waitForFunction(() => document.querySelector('.rl-stage.is-active .rl-actions button[aria-label=Save]').getAttribute('aria-pressed') === 'true');
   await stage.getByRole('button', { name: 'Comments' }).click();
   const dlg = page.getByRole('dialog');
   await dlg.getByLabel('Add a comment').fill('Great culture!');
@@ -452,7 +452,7 @@ await S.test('USR-35', 'Job Reels: non-premium user sees locked Apply + locked r
   const c = await authedContext(browser, u.token); const p = await c.newPage();
   await p.goto(APP + '/videos'); await p.waitForLoadState('networkidle');
   await p.getByTestId('reel-job').waitFor();
-  await p.getByRole('button', { name: /Apply Now \(Premium required\)/ }).click();
+  await p.locator('.rl-stage.is-active').getByRole('button', { name: /Apply Now \(Premium required\)/ }).click();
   const dlg = p.getByRole('alertdialog', { name: 'Apply Access Restricted' });
   await dlg.waitFor();
   await dlg.getByRole('button', { name: 'Maybe Later' }).click();
@@ -475,7 +475,7 @@ await S.test('USR-36', 'Upgrade to Premium request reaches the admin; admin gran
   const hits = [];
   await c.route('https://example.com/**', (route) => { hits.push(route.request().url()); route.fulfill({ status: 200, contentType: 'text/html', body: '<h1>Company careers page</h1>' }); });
   await p.goto(APP + '/videos'); await p.waitForLoadState('networkidle');
-  await p.getByRole('button', { name: /Apply Now \(Premium required\)/ }).click();
+  await p.locator('.rl-stage.is-active').getByRole('button', { name: /Apply Now \(Premium required\)/ }).click();
   await p.getByRole('alertdialog').getByRole('button', { name: 'Upgrade to Premium' }).click();
   await p.getByText(/Request received/).waitFor();
   const reqs = await api.get('/admin/premium-requests', undefined, adminTok);

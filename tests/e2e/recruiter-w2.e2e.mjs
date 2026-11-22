@@ -194,7 +194,7 @@ await S.test('RCW-09', 'Offers: draft from an application, template, send, candi
   await toast('Offer drafted');
   await page.getByTestId('offers-table').getByText('Senior Platform Engineer').waitFor();
   await page.getByRole('button', { name: 'Open' }).first().click();
-  await page.getByTestId('offer-letter').getByText(/Asha Applicant/).waitFor();
+  await page.getByTestId('offer-letter').getByText(/Asha Applicant/).first().waitFor();
   const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'PDF' }).click()]);
   assert(dl.suggestedFilename().endsWith('.pdf'), 'pdf');
   await page.getByRole('button', { name: 'Send offer' }).click();
@@ -241,7 +241,7 @@ await S.test('RCW-12', 'Mobile 375px: new recruiter pages fit the screen', async
 errors.push('--');
 await S.test('RCW-13', 'Job form: screening questions + work mode are saved from the UI', async () => {
   await go('/recruiter/jobs/new');
-  await page.getByText(/screening/i).first().waitFor();
+  await page.getByText(/application questions/i).first().waitFor();
 });
 
 errors.push('--');

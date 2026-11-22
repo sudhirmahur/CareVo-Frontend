@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useAsync } from '../../../lib/hooks';
 import { api } from '../../../lib/api';
 import { formatDate, titleCase } from '../../../lib/format';
 import { Badge, Button, ConfirmDialog, Modal, PageHeader } from '../../../components/ui';
@@ -11,9 +12,22 @@ export default function Videos() {
   const [run, busy] = useDo(res.reload);
   const [watch, setWatch] = useState(null);
   const [del, setDel] = useState(null);
+  const diag = useAsync(() => api.get('/admin/media/diagnostics'), []);
+  const d = diag.data;
   return (
     <>
       <PageHeader title="Videos" description="Moderate company reels. Removed videos are hidden from every feed." />
+      {d && (d.advice || d.missing.length > 0) && (
+        <div className="alert alert-warn" role="alert" data-testid="media-warning" style={{ marginBottom: 14 }}>
+          {d.advice && <p style={{ margin: 0 }}><strong>Storage:</strong> {d.advice}</p>}
+          {d.missing.length > 0 && (
+            <>
+              <p style={{ margin: '6px 0 0' }}><strong>{d.missing.length} video file(s) are missing on the server</strong> and cannot play. Ask the recruiter to upload them again:</p>
+              <ul style={{ margin: '4px 0 0 18px' }}>{d.missing.slice(0, 8).map((m) => <li key={m.id}>{m.title}</li>)}</ul>
+            </>
+          )}
+        </div>
+      )}
       <ListShell res={res} search={q} onSearch={setQ} searchPlaceholder="Search videos" empty={{ icon: 'video', title: 'No videos yet', description: 'Recruiters publish reels from their panel.' }}>
         {(items) => (
           <div className="table-wrap">
@@ -42,7 +56,7 @@ export default function Videos() {
           </div>
         )}
       </ListShell>
-      {watch && <Modal title={watch.title} size="lg" onClose={() => setWatch(null)} footer={<Button variant="ghost" onClick={() => setWatch(null)}>Close</Button>}><VideoPlayer url={watch.video_url} poster={watch.thumbnail_url} title={watch.title} /><p className="muted" style={{ marginTop: 10 }}>{watch.description}</p></Modal>}
+      {watch && <Modal title={watch.title} size="lg" onClose={() => setWatch(null)} footer={<Button variant="ghost" onClick={() => setWatch(null)}>Close</Button>}><VideoPlayer url={watch.video_url} playbackUrl={watch.playback_url} poster={watch.poster_url || watch.thumbnail_url} title={watch.title} /><p className="muted" style={{ marginTop: 10 }}>{watch.description}</p></Modal>}
       <ConfirmDialog open={!!del} danger title="Delete video?" message={del && `"${del.title}" with its likes, saves and comments will be deleted permanently.`} confirmLabel="Delete video" loading={busy}
         onCancel={() => setDel(null)} onConfirm={async () => { if (await run(() => api.delete(`/admin/videos/${del.id}`), 'Video deleted')) setDel(null); }} />
     </>

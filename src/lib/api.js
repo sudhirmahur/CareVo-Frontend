@@ -2,6 +2,14 @@
 
 const RAW_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
 export const API_BASE = RAW_BASE.replace(/\/+$/, '');
+if ((import.meta.env && import.meta.env.PROD) && !import.meta.env.VITE_API_BASE_URL) {
+  // eslint-disable-next-line no-console
+  console.error('CareVo: VITE_API_BASE_URL is not set for this build, so the app is calling http://127.0.0.1:8000. Set it in Vercel > Settings > Environment Variables and redeploy.');
+}
+if ((import.meta.env && import.meta.env.PROD) && typeof window !== 'undefined' && window.location.protocol === 'https:' && RAW_BASE.startsWith('http://') && !/localhost|127\.0\.0\.1/.test(RAW_BASE)) {
+  // eslint-disable-next-line no-console
+  console.error('CareVo: the API address is http:// but the site is https:// - browsers block this (mixed content). Use an https:// API URL.');
+}
 export const API_ORIGIN = API_BASE.replace(/\/api$/, '');
 
 const TOKEN_KEY = 'carevo_token';
@@ -171,6 +179,21 @@ export async function openResume(resumeId) {
   try {
     if (w) w.opener = null;
     const { url } = await request('GET', `/resumes/${resumeId}/link`);
+    const full = `${API_ORIGIN}${url}`;
+    if (w) w.location.href = full;
+    else window.location.href = full;
+  } catch (e) {
+    if (w) w.close();
+    throw e;
+  }
+}
+
+/** A file a candidate uploaded as an answer: signed, short-lived link (only the job's recruiter may ask for it). */
+export async function openAnswerFile(fileId) {
+  const w = window.open('', '_blank');
+  try {
+    if (w) w.opener = null;
+    const { url } = await request('GET', `/recruiter/answer-files/${fileId}/link`);
     const full = `${API_ORIGIN}${url}`;
     if (w) w.location.href = full;
     else window.location.href = full;

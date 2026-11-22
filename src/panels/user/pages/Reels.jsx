@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, assetUrl, errorMessage } from '../../../lib/api';
+import { playbackSrc } from '../../../lib/media';
 import { compactNumber, jobTypeLabel, salaryRange, timeAgo, titleCase } from '../../../lib/format';
 import { useAsync } from '../../../lib/hooks';
 import { Link, useNavigate, useSearchParams } from '../../../lib/router';
@@ -28,57 +29,80 @@ function embedUrl(url) {
   return null;
 }
 
-function Stage({ video, follows, onFollow, onLike, onSave, onShare, onComments, onPrev, onNext, hasPrev, hasNext, onProfile }) {
+/** One full-height reel. Only the active reel (and the next one, for a quick start) get a <video> source. */
+function ReelItem({ video, index, active, near, muted, onToggleMute, follows, onFollow, onLike, onSave, onShare, onComments, onProfile, onApply, applyBusy, premiumLocked }) {
   const ref = useRef(null);
-  const [playing, setPlaying] = useState(true);
-  const [muted, setMuted] = useState(true);
+  const [wantPlay, setWantPlay] = useState(true); // user intent (tap to pause)
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [blocked, setBlocked] = useState(false); // browser refused autoplay
+  const [attempt, setAttempt] = useState(0); // bumped by Retry to force a fresh request
   const embed = embedUrl(video.video_url);
-  const touch = useRef(null);
+  const src = playbackSrc(video);
+  const poster = assetUrl(video.poster_url || video.thumbnail_url || '');
 
-  useEffect(() => { setPlaying(true); }, [video.id]);
+  useEffect(() => { if (active) setWantPlay(true); }, [active, video.id]);
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
-    if (playing) el.play?.().catch(() => setPlaying(false));
-    else el.pause?.();
-  }, [playing, video.id]);
+    if (!el) return undefined;
+    if (active && wantPlay) {
+      const p = el.play?.();
+      if (p && p.catch) p.then(() => setBlocked(false)).catch((e) => { if (e && e.name !== 'AbortError') setBlocked(true); });
+    } else {
+      el.pause?.();
+    }
+    return undefined;
+  }, [active, wantPlay, attempt, near]);
+  // leaving the viewport: pause and rewind so the next visit starts from the top
+  useEffect(() => {
+    const el = ref.current;
+    if (!active && el) { el.pause?.(); try { el.currentTime = 0; } catch { /* not seekable yet */ } }
+  }, [active]);
 
   const company = video.company_id;
   const following = follows.has(company);
   const authorName = video.company_name || video.author?.name || 'Recruiter';
+  const showVideo = !embed && near && !failed;
+  const jobOpen = video.job?.is_open;
 
   return (
-    <div
-      className="rl-stage"
-      onTouchStart={(e) => { touch.current = e.touches[0].clientY; }}
-      onTouchEnd={(e) => {
-        if (touch.current === null) return;
-        const dy = e.changedTouches[0].clientY - touch.current;
-        touch.current = null;
-        if (dy < -70 && hasNext) onNext();
-        else if (dy > 70 && hasPrev) onPrev();
-      }}
-    >
+    <section className={`rl-item rl-stage ${active ? 'is-active' : ''}`} data-testid="reel-item" data-index={index} data-active={active ? 'true' : 'false'} aria-label={video.title}>
       {embed ? (
-        <iframe className="rl-media" src={embed} title={video.title} allow="encrypted-media; picture-in-picture" allowFullScreen loading="lazy" />
-      ) : (
+        active ? <iframe className="rl-media" src={embed} title={video.title} allow="encrypted-media; picture-in-picture" allowFullScreen loading="lazy" /> : <div className="rl-media rl-poster" style={poster ? { backgroundImage: `url(${poster})` } : undefined} />
+      ) : showVideo ? (
         <video
-          key={video.id}
+          key={`${video.id}-${attempt}`}
           ref={ref}
           className="rl-media"
-          src={assetUrl(video.video_url)}
-          poster={video.thumbnail_url ? assetUrl(video.thumbnail_url) : undefined}
+          src={src}
+          poster={poster || undefined}
           muted={muted}
           loop
           playsInline
-          autoPlay
-          preload="metadata"
+          preload={active ? 'auto' : 'metadata'}
           aria-label={video.title}
-          onClick={() => setPlaying((p) => !p)}
-          onPlay={() => setPlaying(true)}
+          onClick={() => setWantPlay((p) => !p)}
+          onLoadStart={() => setLoading(true)}
+          onWaiting={() => setLoading(true)}
+          onCanPlay={() => { setLoading(false); setFailed(false); }}
+          onPlaying={() => { setLoading(false); setBlocked(false); }}
+          onError={() => { setLoading(false); setFailed(true); }}
         />
+      ) : (
+        <div className="rl-media rl-poster" style={poster ? { backgroundImage: `url(${poster})` } : undefined} />
       )}
-      {!embed && !playing && <button type="button" className="rl-bigplay" onClick={() => setPlaying(true)} aria-label="Play"><Icon name="play" size={34} /></button>}
+
+      {active && showVideo && loading && !failed && <div className="rl-spin" role="status" aria-label="Loading video"><span /></div>}
+      {failed && !embed && (
+        <div className="rl-error" role="alert" data-testid="reel-error">
+          <Icon name="alert" size={28} />
+          <p>This video could not be played.</p>
+          <button type="button" className="rl-retry" onClick={() => { setFailed(false); setLoading(true); setAttempt((n) => n + 1); }}>Try again</button>
+        </div>
+      )}
+      {active && showVideo && !failed && (!wantPlay || blocked) && !loading && (
+        <button type="button" className="rl-bigplay" onClick={() => { setWantPlay(true); setBlocked(false); ref.current?.play?.().catch(() => setBlocked(true)); }} aria-label="Play"><Icon name="play" size={34} /></button>
+      )}
 
       <div className="rl-top">
         <button type="button" className="rl-chip" onClick={onProfile} aria-label={`Recruiter ${video.author?.name || authorName}`}>
@@ -87,7 +111,10 @@ function Stage({ video, follows, onFollow, onLike, onSave, onShare, onComments, 
         </button>
         {company && <button type="button" className={`rl-follow ${following ? 'on' : ''}`} onClick={() => onFollow(video)} aria-pressed={following}>{following ? 'Following' : 'Follow'}</button>}
         {!embed && (
-          <button type="button" className="rl-mute" onClick={() => setMuted((m) => !m)} aria-label={muted ? 'Unmute' : 'Mute'} aria-pressed={!muted}><Icon name={muted ? 'volumeOff' : 'volume'} size={18} /></button>
+          <>
+            <button type="button" className="rl-mute" onClick={() => setWantPlay((p) => !p)} aria-label={wantPlay ? 'Pause' : 'Play'} aria-pressed={!wantPlay}><Icon name={wantPlay ? 'pause' : 'play'} size={18} /></button>
+            <button type="button" className="rl-mute" onClick={onToggleMute} aria-label={muted ? 'Unmute' : 'Mute'} aria-pressed={!muted}><Icon name={muted ? 'volumeOff' : 'volume'} size={18} /></button>
+          </>
         )}
       </div>
 
@@ -105,13 +132,13 @@ function Stage({ video, follows, onFollow, onLike, onSave, onShare, onComments, 
         {video.job && (
           <div className="rl-jobchip"><Icon name="briefcase" size={16} /><span className="truncate"><strong>{video.job.title}</strong> · {video.job.location || 'Remote'}</span></div>
         )}
+        {video.job && jobOpen && (
+          <button type="button" className="rl-apply" onClick={onApply} disabled={applyBusy} data-testid="reel-apply" aria-label={premiumLocked ? 'Apply Now (Premium required)' : 'Apply Now'}>
+            <Icon name={premiumLocked ? 'lock' : video.job.apply_type === 'external' ? 'external' : 'send'} size={16} /> Apply Now
+          </button>
+        )}
       </div>
-
-      <div className="rl-nav" aria-hidden={!hasPrev && !hasNext}>
-        <button type="button" onClick={onPrev} disabled={!hasPrev} aria-label="Previous reel"><Icon name="chevronUp" size={20} /></button>
-        <button type="button" onClick={onNext} disabled={!hasNext} aria-label="Next reel"><Icon name="chevronDown" size={20} /></button>
-      </div>
-    </div>
+    </section>
   );
 }
 
@@ -191,6 +218,9 @@ function ReelsInner() {
   const feed = useAsync(() => (tab === 'saved' ? api.get('/videos/saved') : api.get('/videos', { type: tab, limit: 30 })), [tab]);
   const follows = useAsync(() => api.get('/follow/following'), []);
   const [idx, setIdx] = useState(0);
+  const [muted, setMuted] = useState(true); // one setting for the whole feed (autoplay needs muted until the user taps)
+  const feedRef = useRef(null);
+  const lockRef = useRef(false); // true while we scroll programmatically, so the observer does not fight us
   const [applyBusy, setApplyBusy] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const items = useMemo(() => feed.data?.items || [], [feed.data]);
@@ -203,8 +233,55 @@ function ReelsInner() {
     if (!items.length) return;
     const at = wantId ? items.findIndex((v) => v.id === wantId) : -1;
     setIdx(at >= 0 ? at : 0);
+    if (at > 0) requestAnimationFrame(() => scrollToIndex(at, 'auto'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items]);
+
+  // the reel that is mostly visible is the active one (IntersectionObserver, no scroll listeners)
+  useEffect(() => {
+    const root = feedRef.current;
+    if (!root || !items.length || typeof IntersectionObserver === 'undefined') return undefined;
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((en) => {
+        if (en.isIntersecting && en.intersectionRatio >= 0.6) {
+          const i = Number(en.target.getAttribute('data-index'));
+          if (!Number.isNaN(i)) { lockRef.current = false; setIdx(i); }
+        }
+      });
+    }, { root, threshold: [0.6] });
+    root.querySelectorAll('[data-testid="reel-item"]').forEach((el) => obs.observe(el));
+    return () => obs.disconnect();
+  }, [items]);
+
+  // Mouse wheel / trackpad: one gesture = one reel. (With CSS snap alone a small wheel tick snaps back to the same reel.)
+  const idxRef = useRef(0);
+  idxRef.current = idx;
+  useEffect(() => {
+    const root = feedRef.current;
+    if (!root) return undefined;
+    let quiet = null; let armed = true;
+    const onWheel = (e) => {
+      if (Math.abs(e.deltaY) < 4 || e.ctrlKey) return;
+      e.preventDefault();
+      clearTimeout(quiet);
+      quiet = setTimeout(() => { armed = true; }, 170); // a gesture ends after 170ms without wheel events
+      if (!armed) return;
+      armed = false;
+      const next = Math.min(items.length - 1, Math.max(0, idxRef.current + (e.deltaY > 0 ? 1 : -1)));
+      if (next !== idxRef.current) scrollToIndex(next);
+    };
+    root.addEventListener('wheel', onWheel, { passive: false });
+    return () => { root.removeEventListener('wheel', onWheel); clearTimeout(quiet); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length, feed.loading]);
+
+  const scrollToIndex = (i, behavior = 'smooth') => {
+    const el = feedRef.current?.querySelectorAll('[data-testid="reel-item"]')[i];
+    if (!el) return;
+    lockRef.current = true;
+    el.scrollIntoView({ behavior, block: 'start' });
+    setIdx(i);
+  };
   useEffect(() => {
     if (idx > items.length - 1) setIdx(Math.max(0, items.length - 1));
   }, [items.length, idx]);
@@ -285,7 +362,7 @@ function ReelsInner() {
     navigate(`/recruiters/${cur.author.id}`);
   };
 
-  const go = (d) => setIdx((i) => Math.min(items.length - 1, Math.max(0, i + d)));
+  const go = (d) => scrollToIndex(Math.min(items.length - 1, Math.max(0, idx + d)));
   useEffect(() => {
     const onKey = (e) => {
       if (commentsOpen || /input|textarea|select/i.test(e.target.tagName)) return;
@@ -308,7 +385,7 @@ function ReelsInner() {
             <ol className="rl-thumbs" aria-label="Reels">
               {items.map((v, i) => (
                 <li key={v.id}>
-                  <button type="button" className={`rl-thumb ${i === idx ? 'on' : ''}`} onClick={() => setIdx(i)} aria-label={`Play ${v.title}`} aria-current={i === idx ? 'true' : undefined} data-testid="reel-thumb">
+                  <button type="button" className={`rl-thumb ${i === idx ? 'on' : ''}`} onClick={() => scrollToIndex(i)} aria-label={`Play ${v.title}`} aria-current={i === idx ? 'true' : undefined} data-testid="reel-thumb">
                     <span className="rl-thumb-img" style={v.thumbnail_url ? { backgroundImage: `url(${assetUrl(v.thumbnail_url)})` } : undefined}><Icon name="play" size={16} /></span>
                     <span className="rl-thumb-t">{v.title}</span>
                     <small>{timeAgo(v.created_at)}</small>
@@ -317,10 +394,19 @@ function ReelsInner() {
               ))}
             </ol>
             <div className="rl-center">
-              <Stage
-                video={cur} follows={followSet} onFollow={follow} onLike={(v) => toggle(v, 'like')} onSave={(v) => toggle(v, 'save')} onShare={share}
-                onComments={() => setCommentsOpen(true)} onPrev={() => go(-1)} onNext={() => go(1)} hasPrev={idx > 0} hasNext={idx < items.length - 1} onProfile={openProfile}
-              />
+              <div className="rl-feed" ref={feedRef} data-testid="reel-feed" tabIndex={0} aria-label="Reels feed">
+                {items.map((v, i) => (
+                  <ReelItem
+                    key={v.id} video={v} index={i} active={i === idx} near={Math.abs(i - idx) <= 1} muted={muted} onToggleMute={() => setMuted((m) => !m)}
+                    follows={followSet} onFollow={follow} onLike={(x) => toggle(x, 'like')} onSave={(x) => toggle(x, 'save')} onShare={share}
+                    onComments={() => setCommentsOpen(true)} onProfile={openProfile} onApply={apply} applyBusy={applyBusy} premiumLocked={premium.locked}
+                  />
+                ))}
+              </div>
+              <div className="rl-nav" aria-hidden={items.length < 2}>
+                <button type="button" onClick={() => go(-1)} disabled={idx <= 0} aria-label="Previous reel"><Icon name="chevronUp" size={20} /></button>
+                <button type="button" onClick={() => go(1)} disabled={idx >= items.length - 1} aria-label="Next reel"><Icon name="chevronDown" size={20} /></button>
+              </div>
             </div>
             <aside className="rl-right" aria-label="Reel details">
               <JobPanel key={`${cur.id}-${nonce}`} video={cur} onApply={apply} busy={applyBusy} locked={premium.locked} />

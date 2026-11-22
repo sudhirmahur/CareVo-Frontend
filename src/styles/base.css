@@ -311,3 +311,54 @@ a.ann-main:hover { text-decoration: none; filter: brightness(.98); }
   .ann-overlay { align-items: end; padding: 0; }
   .ann-popup { max-width: none; border-radius: 18px 18px 0 0; }
 }
+.video-error { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; color: #fff; text-align: center; padding: 16px; }
+.q-options { display: grid; gap: 6px; }
+.q-option { display: flex; align-items: center; gap: 8px; font-size: .92rem; }
+.apply-method { display: grid; gap: 8px; border: 1px solid var(--border, #e2e8f0); border-radius: 12px; padding: 12px 14px; }
+.apply-method legend { font-weight: 700; padding: 0 6px; }
+.screening-q.dragging { opacity: .5; }
+.q-handle { cursor: grab; color: var(--muted, #64748b); font-size: 1.2rem; line-height: 1; padding: 0 4px; user-select: none; }
+.link-btn { background: none; border: 0; padding: 0; color: var(--primary, #4f46e5); cursor: pointer; font: inherit; display: inline-flex; align-items: center; gap: 6px; text-decoration: underline; }
+
+/* ---- offer letter preview (mirrors the PDF) ---- */
+.offer-sheet { --op: #1d4ed8; --oa: #38bdf8; --ot: #eff6ff; background: #fff; color: #1f2937; border: 1px solid #e5e7eb; border-radius: 10px; box-shadow: 0 6px 24px rgba(15,23,42,.08); overflow: hidden; width: 100%; max-width: 794px; margin: 0 auto; font-size: clamp(11px, 1.7vw, 14px); line-height: 1.55; font-family: Helvetica, Arial, sans-serif; text-align: left; }
+.offer-sheet.os-serif { font-family: "Times New Roman", Times, serif; font-size: clamp(12px, 1.9vw, 15px); }
+.offer-sheet .os-head { display: flex; align-items: center; gap: 1em; padding: 1.4em 2em; min-width: 0; }
+.offer-sheet .os-head.dark { color: #fff; }
+.offer-sheet .os-head.dark .os-logo { background: #fff; border-radius: 6px; padding: 4px 6px; }
+.offer-sheet .os-logo img { display: block; max-height: 3.2em; max-width: 9em; object-fit: contain; }
+.offer-sheet .os-co { min-width: 0; display: grid; }
+.offer-sheet .os-co strong { font-size: 1.35em; overflow-wrap: anywhere; }
+.offer-sheet .os-co small { opacity: .85; overflow-wrap: anywhere; }
+.offer-sheet.os-band .os-head { border-bottom: .3em solid var(--oa); }
+.offer-sheet.os-premium .os-head { border-bottom: .25em double var(--oa); }
+.offer-sheet.os-premium .os-co small { color: var(--oa); font-style: italic; }
+.offer-sheet.os-minimal .os-head { border-bottom: 1px solid var(--oa); color: var(--op); }
+.offer-sheet.os-classic .os-head { flex-direction: column; text-align: center; border-bottom: 3px double var(--op); color: var(--op); }
+.offer-sheet.os-classic .os-co { justify-items: center; }
+.offer-sheet .os-body { padding: 1.6em 2em; }
+.offer-sheet h2 { color: var(--op); font-size: 1.7em; margin: 0 0 .3em; }
+.offer-sheet.os-classic h2 { text-align: center; font-size: 1.5em; }
+.offer-sheet h3 { color: var(--op); font-size: 1.05em; margin: 1.1em 0 .4em; }
+.offer-sheet p { margin: 0 0 .7em; text-align: justify; }
+.offer-sheet .os-meta { display: flex; justify-content: space-between; gap: 1em; flex-wrap: wrap; color: #6b7280; font-size: .85em; margin-bottom: .8em; }
+.offer-sheet .os-table { width: 100%; border-collapse: collapse; border-top: 2px solid var(--op); margin: .6em 0; }
+.offer-sheet .os-table th, .offer-sheet .os-table td { text-align: left; padding: .55em .7em; border-bottom: 1px solid #d1d5db; vertical-align: top; overflow-wrap: anywhere; }
+.offer-sheet .os-table th { width: 38%; background: var(--ot); color: var(--op); }
+.offer-sheet ol { padding-left: 1.4em; margin: 0 0 .8em; }
+.offer-sheet li { margin-bottom: .35em; }
+.offer-sheet .os-sign { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5em; margin-top: 1.4em; }
+.offer-sheet .os-sign p { margin-bottom: .2em; }
+.offer-sheet .os-sign small, .offer-sheet .os-sign b { display: block; }
+.offer-sheet .os-sign small { color: #6b7280; }
+.offer-sheet .os-sigimg { display: block; max-height: 4.5em; max-width: 12em; margin: .3em 0; }
+.offer-sheet .os-sigspace { display: block; height: 3em; }
+.offer-sheet .os-accept b { color: var(--op); }
+.offer-sheet .os-line { display: block; border-bottom: 1px solid #9ca3af; margin: 2.2em 0 .3em; max-width: 16em; }
+.offer-sheet .os-foot { display: flex; justify-content: space-between; gap: 1em; flex-wrap: wrap; padding: .7em 2em; border-top: 1px solid #d1d5db; color: #6b7280; font-size: .75em; }
+@media (max-width: 520px) { .offer-sheet .os-head, .offer-sheet .os-body, .offer-sheet .os-foot { padding-left: 1em; padding-right: 1em; } .offer-sheet .os-sign { grid-template-columns: 1fr; } }
+.style-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.style-opt { text-align: left; border: 2px solid var(--border, #e2e8f0); border-radius: 12px; padding: 8px; background: transparent; cursor: pointer; font: inherit; color: inherit; }
+.style-opt[aria-pressed="true"] { border-color: var(--primary, #4f46e5); box-shadow: 0 0 0 3px rgba(79,70,229,.15); }
+.style-opt .sw { display: block; height: 34px; border-radius: 6px; margin-bottom: 6px; }
+.style-opt small { display: block; color: var(--muted, #64748b); }
