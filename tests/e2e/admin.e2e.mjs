@@ -219,7 +219,8 @@ await S.test('ADM-15', 'Admin posts a job WITH the company job link; goes live i
   await dlg.getByLabel(/Company/).first().selectOption({ index: 1 });
   await dlg.getByLabel('Location').fill('Remote');
   await dlg.getByLabel(/^Description/).fill('Run CI/CD and infrastructure for the platform team.');
-  await dlg.getByLabel('Company job link (optional)').fill(EXT_URL);
+  await dlg.getByLabel(/Apply through external website/).check();
+  await dlg.getByLabel(/Company application link/).fill(EXT_URL);
   await dlg.getByRole('button', { name: 'Post job' }).click();
   await toast('Job posted and live');
   await search('Admin Posted DevOps');

@@ -79,7 +79,7 @@ export default function Videos() {
         <div className="grid grid-auto">
           {items.map((v) => (
             <Card key={v.id} className="r-video">
-              {playing === v.id ? <VideoPlayer url={v.video_url} poster={v.thumbnail_url} title={v.title} /> : (
+              {playing === v.id ? <VideoPlayer url={v.video_url} playbackUrl={v.playback_url} poster={v.poster_url || v.thumbnail_url} title={v.title} /> : (
                 <button type="button" className="r-video-thumb" onClick={() => setPlaying(v.id)} aria-label={`Play ${v.title}`}><Icon name="play" size={34} /></button>
               )}
               <div className="row between" style={{ marginTop: 12, alignItems: 'flex-start' }}>

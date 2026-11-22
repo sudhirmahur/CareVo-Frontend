@@ -19,6 +19,7 @@ import Learning from './pages/Learning';
 import AuditLog from './pages/AuditLog';
 import Jobs from './pages/Jobs';
 import Payments from './pages/Payments';
+import Offers from './pages/Offers';
 import Support from './pages/Support';
 import Roles from './pages/Roles';
 import Emails from './pages/Emails';
@@ -37,10 +38,10 @@ import './admin.css';
 const NAV = [
   { group: 'Overview', items: [['/admin/dashboard', 'Dashboard', 'grid']] },
   { group: 'People', items: [['/admin/users', 'Users', 'users'], ['/admin/recruiters', 'Recruiters', 'user'], ['/admin/companies', 'Companies', 'building']] },
-  { group: 'Content', items: [['/admin/jobs', 'Jobs', 'briefcase'], ['/admin/applications', 'Applications', 'clipboard'], ['/admin/interviews', 'Interviews', 'calendar'], ['/admin/videos', 'Videos', 'video'], ['/admin/reports', 'Reports', 'flag']] },
+  { group: 'Content', items: [['/admin/jobs', 'Jobs', 'briefcase'], ['/admin/applications', 'Applications', 'clipboard'], ['/admin/interviews', 'Interviews', 'calendar'], ['/admin/offers', 'Offer letters', 'award'], ['/admin/videos', 'Videos', 'video'], ['/admin/reports', 'Reports', 'flag']] },
   { group: 'Platform', items: [['/admin/landing', 'Landing page', 'home'], ['/admin/skills', 'Skills & categories', 'sparkles'], ['/admin/learning', 'Prep & assessments', 'book'], ['/admin/banners', 'Banners & popups', 'layers'], ['/admin/payments', 'Payments & plans', 'dollar'], ['/admin/analytics', 'Revenue & growth', 'chart'], ['/admin/support', 'Support & feedback', 'inbox'], ['/admin/events', 'Events & requests', 'calendar'], ['/admin/emails', 'Email templates', 'mail'], ['/admin/roles', 'Roles & admins', 'shield'], ['/admin/health', 'System health', 'zap'], ['/admin/data', 'Data & backups', 'download'], ['/admin/broadcast', 'Broadcast', 'send'], ['/admin/messages', 'Messages', 'message'], ['/admin/settings', 'Settings', 'settings'], ['/admin/audit', 'Audit log', 'shield'], ['/admin/account', 'My account', 'lock']] },
 ];
-const MODULE = { dashboard: 'dashboard', users: 'users', recruiters: 'recruiters', companies: 'companies', jobs: 'jobs', applications: 'applications', interviews: 'interviews', videos: 'videos', reports: 'reports', landing: 'content', skills: 'skills', learning: 'content', banners: 'content', payments: 'payments', analytics: 'analytics', support: 'support', events: 'content', emails: 'emails', roles: 'roles', health: 'system', data: 'system', audit: 'system', settings: 'settings', broadcast: 'content' };
+const MODULE = { dashboard: 'dashboard', users: 'users', recruiters: 'recruiters', companies: 'companies', jobs: 'jobs', applications: 'applications', interviews: 'interviews', offers: 'applications', videos: 'videos', reports: 'reports', landing: 'content', skills: 'skills', learning: 'content', banners: 'content', payments: 'payments', analytics: 'analytics', support: 'support', events: 'content', emails: 'emails', roles: 'roles', health: 'system', data: 'system', audit: 'system', settings: 'settings', broadcast: 'content' };
 const TABS = [['/admin/dashboard', 'Home', 'grid'], ['/admin/users', 'Users', 'users'], ['/admin/jobs', 'Jobs', 'briefcase'], ['/admin/reports', 'Reports', 'flag']];
 
 export default function AdminPanel() {
@@ -65,6 +66,7 @@ export default function AdminPanel() {
     { path: '/admin/jobs', element: <Jobs /> },
     { path: '/admin/applications', element: <Applications /> },
     { path: '/admin/interviews', element: <Interviews /> },
+    { path: '/admin/offers', element: <Offers /> },
     { path: '/admin/videos', element: <Videos /> },
     { path: '/admin/reports', element: <Reports /> },
     { path: '/admin/skills', element: <Skills /> },

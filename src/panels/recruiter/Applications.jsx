@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, errorMessage, openResume } from '../../lib/api';
+import { api, errorMessage, openAnswerFile, openResume } from '../../lib/api';
 import { formatDate, fromLocalInput, isHttpUrl, timeAgo } from '../../lib/format';
 import { useAsync, useDebounce } from '../../lib/hooks';
 import { Link, useNavigate, useSearchParams } from '../../lib/router';
@@ -8,6 +8,11 @@ import { Avatar, Badge, Button, Card, DataState, Input, Modal, PageHeader, Searc
 import Icon from '../../components/Icon';
 import { CompareModal, EvaluationPanel } from './Evaluations';
 import { STAGES, STAGE_OPTIONS, downloadFile } from './util';
+
+function AnswerFile({ id, name }) {
+  const toast = useToast();
+  return <button type="button" className="link-btn" data-testid="answer-file" onClick={() => openAnswerFile(id).catch((e) => toast.error(errorMessage(e)))}><Icon name="download" size={14} /> {name || 'Download file'}</button>;
+}
 
 function CandidateCard({ a, onOpen }) {
   const c = a.candidate || {};
@@ -85,7 +90,7 @@ function DetailModal({ app, onClose, onChanged, teamNames }) {
         <Tabs value={tab} onChange={setTab} tabs={[{ value: 'overview', label: 'Overview' }, { value: 'screening', label: 'Screening', count: (app.answers || []).length }, { value: 'evaluation', label: 'Evaluation' }]} />
         {tab === 'screening' && (
           (app.answers || []).length === 0 ? <p className="muted" data-testid="no-answers">No screening questions were asked for this job.</p> : (
-            <dl className="r-answers" data-testid="answers">{app.answers.map((x) => <div key={x.question_id}><dt>{x.question}</dt><dd>{x.answer}</dd></div>)}</dl>
+            <dl className="r-answers" data-testid="answers">{app.answers.map((x) => <div key={x.question_id}><dt>{x.question}</dt><dd>{x.type === 'file' && x.file_id ? <AnswerFile id={x.file_id} name={x.file_name || x.answer} /> : x.type === 'multiple' && x.values ? x.values.join(', ') : x.answer}</dd></div>)}</dl>
           )
         )}
         {tab === 'evaluation' && <EvaluationPanel appId={app.id} teamNames={teamNames} />}

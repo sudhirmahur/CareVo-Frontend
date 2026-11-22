@@ -78,10 +78,11 @@ await S.test('REC-05', 'Post a job WITH the company job link (validation, then s
   await page.getByLabel(/Job title/).fill('Orbit Backend Engineer');
   await page.getByLabel('Location').fill('Bengaluru');
   await page.getByLabel(/^Description/).fill('Build and scale the Orbit APIs. Python and MongoDB experience needed.');
-  await page.getByLabel('Company job link (optional)').fill('not a url');
+  await page.getByLabel(/Apply through external website/).check();
+  await page.getByLabel(/Company application link/).fill('not a url');
   await page.getByRole('button', { name: 'Submit job' }).click();
   await page.locator('.field-error').first().waitFor();
-  await page.getByLabel('Company job link (optional)').fill(EXT);
+  await page.getByLabel(/Company application link/).fill(EXT);
   await page.getByRole('button', { name: 'Submit job' }).click();
   await toast('Job submitted');
   await page.waitForURL('**/recruiter/jobs');
@@ -193,8 +194,11 @@ await S.test('REC-13', 'Pause / resume a live job (public list reflects it)', as
   let pub = await api.get('/jobs?limit=50');
   assert(!pub.items.some((j) => j.id === job.id), 'paused job still public');
   await card.locator('label.switch').click();
-  await toast('');
-  pub = await api.get('/jobs?limit=50');
+  for (let i = 0; i < 25; i++) { // the toggle saves asynchronously - poll instead of racing the previous toast
+    pub = await api.get('/jobs?limit=50');
+    if (pub.items.some((j) => j.id === job.id)) break;
+    await page.waitForTimeout(300);
+  }
   assert(pub.items.some((j) => j.id === job.id), 'resumed job not public');
 });
 

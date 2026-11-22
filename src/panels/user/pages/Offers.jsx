@@ -3,6 +3,7 @@ import { api, errorMessage } from '../../../lib/api';
 import { formatDate } from '../../../lib/format';
 import { useAsync } from '../../../lib/hooks';
 import { useToast } from '../../../lib/toast';
+import OfferPreview from '../../../components/shared/OfferPreview';
 import { Badge, Button, Card, DataState, Modal, PageHeader, Textarea } from '../../../components/ui';
 import { downloadAuthed } from './_files';
 
@@ -30,7 +31,7 @@ function Detail({ id, onClose, onChanged }) {
         {o && (
           <div className="stack">
             <div className="row"><Badge tone={TONE[o.status]} dot>{o.status}</Badge><strong>{o.salary_text}</strong>{o.expires_at && o.status === 'sent' && <span className="muted small">Respond by {formatDate(o.expires_at)}</span>}</div>
-            <pre className="offer-letter" data-testid="offer-letter">{o.letter}</pre>
+            <OfferPreview d={{ ...o, date: o.sent_at || o.created_at, ref: `OFR-${String(o.id).slice(-8).toUpperCase()}` }} />
             {decision && (
               <div className="stack" data-testid="offer-respond">
                 <p><strong>{decision === 'accept' ? 'Accept this offer?' : 'Decline this offer?'}</strong> This cannot be changed afterwards.</p>

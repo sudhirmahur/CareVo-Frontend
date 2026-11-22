@@ -138,7 +138,7 @@ await S.test('UW-06', 'Offers: a sent offer shows up; view letter, PDF, decline 
   await go('/offers');
   await page.getByTestId('offer-list').getByText('Staff React Engineer').waitFor();
   await page.getByRole('button', { name: 'View offer Staff React Engineer' }).click();
-  await page.getByTestId('offer-letter').getByText(/Uma User/).waitFor();
+  await page.getByTestId('offer-letter').getByText(/Uma User/).first().waitFor();
   const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download PDF' }).click()]);
   assert(dl.suggestedFilename().endsWith('.pdf'), 'pdf download');
   await page.getByRole('button', { name: 'Decline' }).click();

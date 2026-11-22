@@ -1,13 +1,17 @@
 import { useState } from 'react';
 import { JOB_TYPES, fromLocalInput, isHttpUrl, toLocalInput } from '../../lib/format';
-import { Button, Input, Select, TagInput, Textarea } from '../ui';
+import { Button, Input, Modal, Select, TagInput, Textarea } from '../ui';
+import QuestionFields, { QUESTION_TYPES } from './QuestionFields';
 import Icon from '../Icon';
 
 const TYPES = [...JOB_TYPES, ...(JOB_TYPES.some((t) => t.value === 'freelance') ? [] : [{ value: 'freelance', label: 'Freelance' }])];
 const MODES = [{ value: 'onsite', label: 'On-site' }, { value: 'hybrid', label: 'Hybrid' }, { value: 'remote', label: 'Remote' }];
 const KINDS = [{ value: 'general', label: 'General' }, { value: 'experience', label: 'Experience' }, { value: 'qualification', label: 'Qualification' }];
 let qSeq = 0;
+const MAX_Q = 25;
+const hasOptions = (t) => t === 'choice' || t === 'multiple';
 const newQ = (q = {}) => ({ key: `q${(qSeq += 1)}`, id: q.id, type: q.type || 'text', question: q.question || '', options: (q.options || []).join(', '), required: q.required ?? true, kind: q.kind || 'general' });
+const optList = (q) => q.options.split(',').map((o) => o.trim()).filter(Boolean);
 
 const lines = (arr) => (arr || []).join('\n');
 const toLines = (s) => s.split('\n').map((x) => x.trim()).filter(Boolean);
@@ -32,6 +36,9 @@ export default function JobForm({ initial, companies, onSubmit, submitting, subm
     application_deadline: toLocalInput(initial?.application_deadline),
     work_mode: initial?.work_mode || '',
   }));
+  const [method, setMethod] = useState(initial?.apply_url ? 'external' : 'carevo');
+  const [preview, setPreview] = useState(false);
+  const [dragKey, setDragKey] = useState(null);
   const [qs, setQs] = useState(() => (initial?.screening_questions || []).map(newQ));
   const upQ = (key, patch) => setQs((a) => a.map((q) => (q.key === key ? { ...q, ...patch } : q)));
   const moveQ = (i, d) => setQs((a) => { const b = [...a]; const j = i + d; if (j < 0 || j >= b.length) return a; [b[i], b[j]] = [b[j], b[i]]; return b; });
@@ -44,7 +51,8 @@ export default function JobForm({ initial, companies, onSubmit, submitting, subm
     if (f.title.trim().length < 3) er.title = 'Title must be at least 3 characters.';
     if (f.description.trim().length < 10) er.description = 'Describe the role in at least 10 characters.';
     if (companies && !f.company_id) er.company_id = 'Choose a company.';
-    if (f.apply_url.trim() && !isHttpUrl(f.apply_url)) er.apply_url = 'Enter a full link starting with http:// or https://';
+    if (method === 'external' && !f.apply_url.trim()) er.apply_url = 'Enter the company application link.';
+    else if (method === 'external' && !isHttpUrl(f.apply_url)) er.apply_url = 'Enter a full link starting with http:// or https://';
     const lo = f.salary_min === '' ? null : Number(f.salary_min);
     const hi = f.salary_max === '' ? null : Number(f.salary_max);
     if ((lo !== null && (Number.isNaN(lo) || lo < 0)) || (hi !== null && (Number.isNaN(hi) || hi < 0))) er.salary_min = 'Salary must be a positive number.';
@@ -52,7 +60,8 @@ export default function JobForm({ initial, companies, onSubmit, submitting, subm
     const qErr = {};
     qs.forEach((q) => {
       if (q.question.trim().length < 3) qErr[q.key] = 'Write the question (3+ characters).';
-      else if (q.type === 'choice' && q.options.split(',').map((o) => o.trim()).filter(Boolean).length < 2) qErr[q.key] = 'Add at least two options, separated by commas.';
+      else if (hasOptions(q.type) && optList(q).length < 2) qErr[q.key] = 'Add at least two options, separated by commas.';
+      else if (hasOptions(q.type) && new Set(optList(q).map((o) => o.toLowerCase())).size !== optList(q).length) qErr[q.key] = 'Options must be different from each other.';
     });
     if (Object.keys(qErr).length) er.questions = qErr;
     setErrors(er);
@@ -67,10 +76,10 @@ export default function JobForm({ initial, companies, onSubmit, submitting, subm
       skills: f.skills,
       requirements: toLines(f.requirements),
       responsibilities: toLines(f.responsibilities),
-      apply_url: f.apply_url.trim() || null,
+      apply_url: method === 'external' ? f.apply_url.trim() : null,
       application_deadline: fromLocalInput(f.application_deadline),
       work_mode: f.work_mode || null,
-      screening_questions: qs.map((q) => ({ ...(q.id ? { id: q.id } : {}), type: q.type, question: q.question.trim(), options: q.type === 'choice' ? q.options.split(',').map((o) => o.trim()).filter(Boolean) : [], required: q.required, kind: q.kind })),
+      screening_questions: qs.map((q) => ({ ...(q.id ? { id: q.id } : {}), type: q.type, question: q.question.trim(), options: hasOptions(q.type) ? optList(q) : [], required: q.required, kind: q.kind })),
     };
     if (companies) payload.company_id = f.company_id;
     if (initial && !payload.apply_url) payload.clear_apply_url = true;
@@ -95,27 +104,41 @@ export default function JobForm({ initial, companies, onSubmit, submitting, subm
         <div className="full"><TagInput label="Skills" value={f.skills} onChange={(skills) => setF((s) => ({ ...s, skills }))} placeholder="React, Node.js… press Enter" /></div>
         <Textarea label="Responsibilities" hint="One per line" rows={4} value={f.responsibilities} onChange={set('responsibilities')} />
         <Textarea label="Requirements" hint="One per line" rows={4} value={f.requirements} onChange={set('requirements')} />
-        <div className="full">
-          <Input label="Company job link (optional)" type="url" value={f.apply_url} onChange={set('apply_url')} error={errors.apply_url} placeholder="https://company.com/careers/job-123" />
-        </div>
-        <div className="full apply-banner">
-          <Icon name="link" size={18} />
-          <span>{f.apply_url.trim() ? 'When a candidate clicks Apply, the application is saved in their Carevo history and they are sent to this link to finish on your site.' : 'No link set: candidates apply inside Carevo with their resume.'}</span>
-        </div>
+        <fieldset className="full apply-method" data-testid="apply-method">
+          <legend>How should candidates apply?</legend>
+          <label className="q-option"><input type="radio" name="apply-method" value="carevo" checked={method === 'carevo'} onChange={() => setMethod('carevo')} /> Apply through CareVo (resume + questions are saved here)</label>
+          <label className="q-option"><input type="radio" name="apply-method" value="external" checked={method === 'external'} onChange={() => setMethod('external')} /> Apply through external website (company career page)</label>
+          {method === 'external' && <Input label="Company application link" type="url" value={f.apply_url} onChange={set('apply_url')} error={errors.apply_url} placeholder="https://company.com/careers/software-developer" required />}
+          <div className="apply-banner">
+            <Icon name="link" size={18} />
+            <span>{method === 'external' ? 'When a candidate clicks Apply on Company Website, the application is saved in their CareVo history and the company page opens in a new tab.' : 'Candidates apply inside CareVo with their resume. You review them in Applications and update their status.'}</span>
+          </div>
+        </fieldset>
         <Input label="Application deadline (optional)" type="datetime-local" value={f.application_deadline} onChange={set('application_deadline')} />
       </div>
       <fieldset className="screening-box" data-testid="screening-editor">
-        <legend>Screening questions</legend>
-        <p className="muted small">Candidates answer these when they apply. You can filter applicants by their answers.</p>
+        <legend>Application questions</legend>
+        <p className="muted small">Candidates answer these when they apply. Drag the handle (or use Up / Down) to reorder. You can filter applicants by their answers.</p>
         {qs.map((q, i) => (
-          <div className="screening-q" key={q.key} data-testid="screening-q">
+          <div
+            className={`screening-q ${dragKey === q.key ? 'dragging' : ''}`}
+            key={q.key}
+            data-testid="screening-q"
+            onDragOver={(e) => { if (dragKey) e.preventDefault(); }}
+            onDrop={(e) => { e.preventDefault(); if (!dragKey || dragKey === q.key) return; setQs((a) => { const from = a.findIndex((x) => x.key === dragKey); const to = a.findIndex((x) => x.key === q.key); if (from < 0 || to < 0) return a; const b = [...a]; const [m] = b.splice(from, 1); b.splice(to, 0, m); return b; }); setDragKey(null); }}
+          >
             <div className="form-grid">
               <div className="full"><Input label={`Question ${i + 1}`} value={q.question} onChange={(e) => upQ(q.key, { question: e.target.value })} error={errors.questions?.[q.key]} maxLength={300} /></div>
-              <Select label="Answer type" value={q.type} onChange={(e) => upQ(q.key, { type: e.target.value })} options={[{ value: 'text', label: 'Text' }, { value: 'choice', label: 'Multiple choice' }, { value: 'yesno', label: 'Yes / No' }]} />
+              <Select label="Answer type" value={q.type} onChange={(e) => upQ(q.key, { type: e.target.value })} options={QUESTION_TYPES} />
               <Select label="Category" value={q.kind} onChange={(e) => upQ(q.key, { kind: e.target.value })} options={KINDS} />
-              {q.type === 'choice' && <div className="full"><Input label="Options (comma separated)" value={q.options} onChange={(e) => upQ(q.key, { options: e.target.value })} placeholder="Immediate, 30 days, 60 days" /></div>}
+              {hasOptions(q.type) && <div className="full"><Input label="Options (comma separated)" value={q.options} onChange={(e) => upQ(q.key, { options: e.target.value })} placeholder="Immediate, 30 days, 60 days" /></div>}
             </div>
             <div className="row-wrap">
+              <span
+                className="q-handle" title="Drag to reorder" aria-hidden="true" data-testid="q-handle" draggable
+                onDragStart={(e) => { setDragKey(q.key); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', q.key); const row = e.currentTarget.closest('.screening-q'); if (row) e.dataTransfer.setDragImage(row, 20, 20); } catch { /* old browsers */ } }}
+                onDragEnd={() => setDragKey(null)}
+              >⠿</span>
               <label className="small"><input type="checkbox" checked={q.required} onChange={(e) => upQ(q.key, { required: e.target.checked })} /> Required</label>
               <Button variant="ghost" size="sm" onClick={() => moveQ(i, -1)} disabled={i === 0} aria-label={`Move question ${i + 1} up`}>Up</Button>
               <Button variant="ghost" size="sm" onClick={() => moveQ(i, 1)} disabled={i === qs.length - 1} aria-label={`Move question ${i + 1} down`}>Down</Button>
@@ -123,12 +146,30 @@ export default function JobForm({ initial, companies, onSubmit, submitting, subm
             </div>
           </div>
         ))}
-        {qs.length < 10 && <Button variant="secondary" size="sm" icon="plus" onClick={() => setQs((a) => [...a, newQ()])}>Add question</Button>}
+        <div className="row-wrap">
+          {qs.length < MAX_Q && <Button variant="secondary" size="sm" icon="plus" onClick={() => setQs((a) => [...a, newQ()])}>Add question</Button>}
+          {qs.length > 0 && <Button variant="ghost" size="sm" icon="eye" onClick={() => setPreview(true)} data-testid="preview-form">Preview application form</Button>}
+          <span className="muted small">{qs.length}/{MAX_Q}</span>
+        </div>
       </fieldset>
+      {preview && <PreviewModal qs={qs} title={f.title} onClose={() => setPreview(false)} />}
       <div className="row" style={{ justifyContent: 'flex-end' }}>
         {onCancel && <Button variant="ghost" onClick={onCancel}>Cancel</Button>}
         <Button type="submit" loading={submitting}>{submitLabel}</Button>
       </div>
     </form>
+  );
+}
+
+function PreviewModal({ qs, title, onClose }) {
+  const [answers, setAnswers] = useState({});
+  const questions = qs.map((q) => ({ id: q.key, type: q.type, question: q.question || '(question text)', options: hasOptions(q.type) ? optList(q) : [], required: q.required }));
+  return (
+    <Modal title="Preview: application form" description={title || 'Your job'} onClose={onClose} footer={<Button onClick={onClose}>Close preview</Button>}>
+      <div className="stack" data-testid="form-preview">
+        <p className="muted small">This is what candidates will see. Nothing you type here is saved.</p>
+        <QuestionFields questions={questions} answers={answers} onChange={(id, v) => setAnswers((a) => ({ ...a, [id]: v }))} preview />
+      </div>
+    </Modal>
   );
 }
