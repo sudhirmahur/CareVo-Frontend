@@ -27,6 +27,7 @@ export default function MediaUpload({ purpose, kind = 'image', value, onChange, 
   const input = useRef(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [pct, setPct] = useState(null);
 
   const pick = async (e) => {
     const file = e.target.files?.[0];
@@ -39,7 +40,8 @@ export default function MediaUpload({ purpose, kind = 'image', value, onChange, 
     setError('');
     setBusy(true);
     try {
-      const res = await uploadMedia(file, purpose);
+      setPct(null);
+      const res = await uploadMedia(file, purpose, { onProgress: setPct });
       onChange(res.url, res);
     } catch (err) {
       const m = errorMessage(err);
@@ -47,6 +49,7 @@ export default function MediaUpload({ purpose, kind = 'image', value, onChange, 
       toast.error(m);
     } finally {
       setBusy(false);
+      setPct(null);
     }
   };
 
@@ -59,10 +62,11 @@ export default function MediaUpload({ purpose, kind = 'image', value, onChange, 
         {preview && value && kind === 'audio' && <audio src={assetUrl(value)} controls preload="none" />}
         <div className="media-up-actions">
           <input ref={input} id={id} type="file" className="sr-only" accept={ACCEPT[kind]} onChange={pick} disabled={busy} />
-          <Button type="button" size="sm" variant="secondary" icon="upload" loading={busy} onClick={() => input.current?.click()}>{value ? 'Replace' : label}</Button>
+          <Button type="button" size="sm" variant="secondary" icon="upload" loading={busy} onClick={() => input.current?.click()}>{busy && pct != null ? `Uploading ${pct}%` : value ? 'Replace' : label}</Button>
           {value && <Button type="button" size="sm" variant="ghost" icon="x" onClick={() => onChange('', null)} aria-label="Remove file">Remove</Button>}
         </div>
       </div>
+      {busy && pct != null && <div className="up-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><span style={{ width: `${pct}%` }} /></div>}
       {hint && !error && <p className="field-hint">{hint}</p>}
       {error && <p className="field-error" role="alert"><Icon name="alert" size={13} /> {error}</p>}
     </div>

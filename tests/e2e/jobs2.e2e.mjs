@@ -165,7 +165,7 @@ await S.test('JB-05', 'External job: Apply opens the company website in a new ta
 
 // ------------------------------------------------------------------------ offers
 let offerId, appId;
-await S.test('JB-06', 'Recruiter creates an offer: 5 designs, letterhead, signature upload, live responsive preview, PDF', async () => {
+await S.test('JB-06', 'Recruiter creates an offer: 7 designs, letterhead, signature upload, live responsive preview, PDF', async () => {
   const p = rec.p;
   const apps = await api.get('/recruiter/applications?limit=50', undefined, recTok);
   appId = apps.items.find((a) => a.candidate?.name === 'Casey Candidate' && a.job_title === TITLE).id;
@@ -177,7 +177,7 @@ await S.test('JB-06', 'Recruiter creates an offer: 5 designs, letterhead, signat
   await dlg.getByLabel('Probation period').selectOption('3');
   await dlg.getByLabel('Working hours').fill('Mon-Fri, 10 AM - 7 PM');
   await dlg.getByLabel('Notice period').fill('30 days');
-  assert((await dlg.getByTestId('offer-style').getByRole('button').count()) === 5, 'five designs');
+  assert((await dlg.getByTestId('offer-style').getByRole('button').count()) === 7, 'seven designs');
   await dlg.getByTestId('offer-style').getByRole('button', { name: /Premium Corporate/ }).click();
   await dlg.getByLabel('Company address').fill('12 MG Road, Jaipur');
   await dlg.getByLabel('Signatory name').fill('Asha Verma');
@@ -193,7 +193,13 @@ await S.test('JB-06', 'Recruiter creates an offer: 5 designs, letterhead, signat
   // switching the style changes the preview
   await dlg.getByTestId('offer-style').getByRole('button', { name: /Modern Gradient/ }).click();
   assert((await prev.getAttribute('data-style')) === 'modern_gradient', 'style switch');
-  await dlg.getByTestId('offer-style').getByRole('button', { name: /Classic Formal/ }).click();
+  for (const [re, key, probe] of [[/Vibrant Swoosh/, 'vibrant_swoosh', 'Terms and Conditions:'], [/Playful Circles/, 'playful_circles', 'Terms and conditions'], [/Minimal Professional/, 'minimal_professional', 'Terms and conditions'], [/Modern Corporate/, 'modern_corporate', 'Terms and conditions'], [/Premium Corporate/, 'premium_corporate', 'Terms and conditions'], [/Classic Formal/, 'classic_formal', 'Terms and conditions']]) {
+    await dlg.getByTestId('offer-style').getByRole('button', { name: re }).click();
+    assert((await prev.getAttribute('data-style')) === key, `preview switches to ${key}`);
+    await prev.getByText(probe).first().waitFor();
+    if (key === 'vibrant_swoosh') for (const t of ['Annual Compensation', 'Expected Joining Date', 'Probation period of 3 months', 'Notice period: 30 days', 'Please respond to this offer on']) await prev.getByText(t).first().waitFor();
+  }
+  await dlg.getByTestId('offer-style').getByRole('button', { name: /Vibrant Swoosh/ }).click();
   await dlg.getByRole('button', { name: 'Create draft' }).click();
   await toast(p, 'Offer drafted');
   offerId = (await api.get('/recruiter/offers', undefined, recTok)).items.find((o) => o.designation === 'Backend Engineer').id;
@@ -214,7 +220,7 @@ await S.test('JB-07', 'Candidate sees the designed letter, downloads the PDF and
   await p.getByRole('button', { name: /View offer Backend Engineer/ }).click();
   const letter = p.getByTestId('offer-letter');
   await letter.getByText('Casey Candidate').first().waitFor();
-  assert((await letter.getAttribute('data-style')) === 'classic_formal', 'candidate sees the same style');
+  assert((await letter.getAttribute('data-style')) === 'vibrant_swoosh', 'candidate sees the same style');
   await letter.getByAltText('Authorised signature').waitFor();
   const [dl] = await Promise.all([p.waitForEvent('download'), p.getByRole('button', { name: 'Download PDF' }).click()]);
   assert(fs.readFileSync(await dl.path()).subarray(0, 5).toString() === '%PDF-', 'pdf');
@@ -249,7 +255,56 @@ await S.test('JB-09', 'Mobile 390px: question form and offer letter do not overf
   }
 });
 
-await S.test('JB-10', 'No console errors or 5xx during the whole run', async () => {
+await S.test('JB-10', 'Mobile 390px: the two new designs (Vibrant Swoosh, Playful Circles) preview without overflow', async () => {
+  const m = await mk(recTok, { width: 390, height: 800 });
+  await m.p.goto(APP + `/recruiter/offers?application_id=${appId}`); await m.p.waitForLoadState('networkidle');
+  const dlg = m.p.getByRole('dialog');
+  await dlg.getByLabel('Designation').fill('Backend Engineer');
+  await dlg.getByLabel('Salary (per year)').fill('1800000');
+  await dlg.getByLabel('Joining date').fill('2027-01-10');
+  await dlg.getByLabel('Company address').fill('12 MG Road, Jaipur, Rajasthan 302001');
+  await dlg.getByTestId('offer-preview-toggle').click();
+  const prev = dlg.getByTestId('offer-preview').getByTestId('offer-letter');
+  for (const [re, key] of [[/Vibrant Swoosh/, 'vibrant_swoosh'], [/Playful Circles/, 'playful_circles']]) {
+    await dlg.getByTestId('offer-style').getByRole('button', { name: re }).click();
+    assert((await prev.getAttribute('data-style')) === key, key);
+    await noOverflow(m.p);
+    const w = await prev.evaluate((el) => el.getBoundingClientRect().width);
+    assert(w <= 390, `${key} letter ${w}px wider than screen`);
+    await prev.screenshot({ path: `/home/claude/shots/user/e2e-offer-${key}-mobile.png` });
+  }
+  await m.c.close();
+});
+
+await S.test('JB-11', 'Job page: Share gives a link whose preview page has the job title/company (Open Graph) and forwards to the job; works on a phone', async () => {
+  const ctx = await authedContext(browser, cand.token, { width: 390, height: 800 });
+  await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: APP }).catch(() => {});
+  const p = await ctx.newPage(); watch(p, errors);
+  const list = await api.get('/jobs?limit=1', undefined, cand.token);
+  const job = list.items[0];
+  await p.goto(APP + `/jobs/${job.id}`); await p.waitForLoadState('networkidle');
+  await p.getByRole('button', { name: 'Share' }).click();
+  let link = '';
+  try { await p.locator('.toast', { hasText: 'Share link copied' }).first().waitFor({ timeout: 3000 }); link = await p.evaluate(() => navigator.clipboard.readText()); }
+  catch { const t = await p.locator('.toast', { hasText: '/public/share/jobs/' }).first().innerText(); link = t.match(/https?:\S+/)[0]; }
+  assert(link.endsWith(`/public/share/jobs/${job.id}`), 'share link ' + link);
+  const html = await (await fetch(link)).text();
+  assert(html.includes('property="og:title"') && html.includes(job.title.replace(/&/g, '&amp;')) && html.includes(`/jobs/${job.id}`), 'preview tags + forward link');
+  await noOverflow(p);
+  await ctx.close();
+});
+
+await S.test('JB-12', 'robots.txt hides the API and panels; sitemap lists live jobs', async () => {
+  const robots = await (await fetch(API.replace(/\/api$/, '') + '/robots.txt')).text();
+  assert(/Disallow: \/api\//.test(robots), 'robots');
+  const fe = await (await fetch(APP + '/robots.txt')).text();
+  assert(/Disallow: \/admin/.test(fe) && /Disallow: \/recruiter/.test(fe), 'frontend robots');
+  const job = (await api.get('/jobs?limit=1', undefined, cand.token)).items[0];
+  const sm = await (await fetch(API + '/public/sitemap.xml')).text();
+  assert(sm.includes(`/jobs/${job.id}`), 'sitemap has the job');
+});
+
+await S.test('JB-13', 'No console errors or 5xx during the whole run', async () => {
   const bad = errors.filter((e) => e !== '--' && !/example\.invalid|company\.example|ERR_NAME_NOT_RESOLVED|Failed to load resource: net::ERR/.test(e));
   assert(bad.length === 0, bad.slice(0, 4).join(' | '));
 });
