@@ -102,7 +102,7 @@ function OfferModal({ offer, templates, defaultAppId, onClose, onDone }) {
           <div className="style-picker">
             {OFFER_STYLES.map((st) => (
               <button type="button" key={st.key} className="style-opt" aria-pressed={f.template_style === st.key} onClick={() => setF((s) => ({ ...s, template_style: st.key }))}>
-                <span className="sw" style={{ background: st.head === 'gradient' ? `linear-gradient(90deg, ${st.primary}, ${st.accent})` : st.primary, borderBottom: `4px solid ${st.accent}` }} />
+                <span className="sw" style={{ background: ['gradient', 'swoosh'].includes(st.head) ? `linear-gradient(90deg, ${st.primary}, ${st.accent})` : st.primary, borderBottom: `4px solid ${st.accent}` }} />
                 <strong>{st.name}</strong>
               </button>
             ))}

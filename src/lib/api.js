@@ -1,4 +1,5 @@
 /* Single fetch-based API client. Every network call in the UI goes through here. */
+import { directUpload, xhrSend } from './directUpload';
 
 const RAW_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
 export const API_BASE = RAW_BASE.replace(/\/+$/, '');
@@ -157,7 +158,23 @@ export function assetUrl(url) {
 }
 
 /** Upload an image / audio / video through the backend (Cloudinary when configured, local disk otherwise). */
-export function uploadMedia(file, purpose) {
+export async function uploadMedia(file, purpose, { onProgress } = {}) {
+  if (purpose === 'video') {
+    // Big videos go straight from the browser to Cloudinary (no Render timeout/memory limit); falls back automatically.
+    let direct = null;
+    try {
+      direct = await directUpload({
+        file,
+        onProgress,
+        getTicket: () => request('POST', '/media/direct-upload/ticket'),
+        complete: (url) => request('POST', '/media/direct-upload/complete', { body: { url } }),
+        send: xhrSend,
+      });
+    } catch (e) {
+      if (!(e instanceof ApiError) || ![403, 404, 501].includes(e.status)) throw e; // anything else is shown to the user
+    }
+    if (direct) return direct;
+  }
   const form = new FormData();
   form.append('file', file);
   form.append('purpose', purpose);

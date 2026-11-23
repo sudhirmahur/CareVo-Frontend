@@ -4,7 +4,7 @@ import { formatDate, jobTypeLabel, salaryRange } from '../../../lib/format';
 import { useAsync } from '../../../lib/hooks';
 import { Link, useNavigate, useParams } from '../../../lib/router';
 import { useToast } from '../../../lib/toast';
-import { errorMessage } from '../../../lib/api';
+import { API_BASE, errorMessage } from '../../../lib/api';
 import Icon from '../../../components/Icon';
 import ReportModal from '../../../components/shared/ReportModal';
 import { Avatar, Badge, Button, Card, DataState, SkeletonList, SkillChips } from '../../../components/ui';
@@ -26,6 +26,18 @@ export default function JobDetail() {
   const { data: job, loading, error, reload, setData } = useAsync(() => api.get(`/jobs/${id}`), [id]);
   const [reporting, setReporting] = useState(false);
   const { apply, busyId, node } = useApply({ onApplied: () => setData((j) => ({ ...j, has_applied: true, application_status: 'applied' })) });
+
+  const shareJob = async () => {
+    // the share link opens a small page with preview tags (title, company, description) and then forwards to this job
+    const url = `${API_BASE}/public/share/jobs/${job.id}`;
+    try {
+      if (navigator.share) await navigator.share({ title: `${job.title} at ${job.company_name || 'CareVo'}`, url });
+      else { await navigator.clipboard.writeText(url); toast.success('Share link copied'); }
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+      toast.info(url);
+    }
+  };
 
   const toggleSave = async () => {
     const next = !job.is_saved;
@@ -72,10 +84,11 @@ export default function JobDetail() {
               <Bullets title="Requirements" items={job.requirements} />
               {job.skills?.length > 0 && <Card title="Skills"><SkillChips skills={job.skills} /></Card>}
             </div>
-            <aside className="u-side">
+            <aside className="u-detail-side">
               <Card className="u-sticky stack">
                 <ApplyControl job={job} onApply={apply} busy={busyId === job.id} />
                 <Button variant="secondary" icon="bookmark" onClick={toggleSave} aria-pressed={!!job.is_saved}>{job.is_saved ? 'Saved' : 'Save job'}</Button>
+                <Button variant="secondary" icon="share" onClick={shareJob}>Share</Button>
                 {job.recruiter_id && <Button variant="secondary" icon="message" onClick={() => navigate(`/messages?with=${job.recruiter_id}`)}>Message recruiter</Button>}
                 <Button variant="ghost" icon="flag" onClick={() => setReporting(true)}>Report this job</Button>
                 {job.company && (
